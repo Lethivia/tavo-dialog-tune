@@ -1,0 +1,23 @@
+<!-- 对话微调 — 行内微调按钮（挂载于 /messages/end?role=user|character） -->
+<link rel="stylesheet" href="/plugins/io.github.dialogtune.dialog-tune/ui/css/message.css" />
+<div class="dt-msg" id="dt-message-root" hidden>
+  <button class="dt-msg__btn" type="button" data-dt-action="tune">
+    <span class="dt-msg__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="14" height="14">
+        <path
+          d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          fill="none"
+        />
+        <circle cx="16" cy="7" r="2.2" stroke="currentColor" stroke-width="1.6" fill="none" />
+        <circle cx="10" cy="12" r="2.2" stroke="currentColor" stroke-width="1.6" fill="none" />
+        <circle cx="18" cy="17" r="2.2" stroke="currentColor" stroke-width="1.6" fill="none" />
+      </svg>
+    </span>
+    <span data-dt-label>微调</span>
+  </button>
+</div>
+<script src="/plugins/io.github.dialogtune.dialog-tune/ui/js/core.js"></script>
+<script src="/plugins/io.github.dialogtune.dialog-tune/ui/js/message.js"></script>

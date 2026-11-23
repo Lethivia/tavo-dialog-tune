@@ -1,0 +1,620 @@
+/*!
+ * 对话微调 — 面板样式
+ * 颜色全部走 CSS 变量，浅色/深色自动适配，不硬编码主题色。
+ */
+
+.dt-sheet-root {
+  --dt-accent: #6366f1;
+  --dt-accent-strong: #4f46e5;
+  --dt-accent-soft: rgba(99, 102, 241, 0.12);
+  --dt-surface: #ffffff;
+  --dt-surface-2: #f5f6fa;
+  --dt-surface-3: #eceef5;
+  --dt-text: #15171d;
+  --dt-text-soft: #5d6376;
+  --dt-text-faint: #8b90a2;
+  --dt-border: rgba(21, 23, 29, 0.1);
+  --dt-border-strong: rgba(21, 23, 29, 0.16);
+  --dt-shadow: 0 24px 64px rgba(14, 17, 27, 0.26);
+  --dt-shadow-soft: 0 2px 8px rgba(14, 17, 27, 0.08);
+  --dt-add: rgba(16, 163, 74, 0.16);
+  --dt-add-ink: #0f7a43;
+  --dt-del: rgba(220, 38, 38, 0.14);
+  --dt-del-ink: #b42318;
+  --dt-radius: 18px;
+  --dt-radius-sm: 12px;
+  --dt-inset-top: 0px;
+  --dt-inset-bottom: 0px;
+
+  position: fixed;
+  /* 顶部留出 App 顶栏，遮罩不覆盖宿主导航栏 */
+  inset: var(--dt-inset-top, 0px) 0 0 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
+  color: var(--dt-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.dt-sheet-root[hidden] {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .dt-sheet-root {
+    --dt-accent: #818cf8;
+    --dt-accent-strong: #6366f1;
+    --dt-accent-soft: rgba(129, 140, 248, 0.16);
+    --dt-surface: #191c24;
+    --dt-surface-2: #21242e;
+    --dt-surface-3: #2a2e3a;
+    --dt-text: #eef0f6;
+    --dt-text-soft: #a8aec1;
+    --dt-text-faint: #7d8398;
+    --dt-border: rgba(255, 255, 255, 0.1);
+    --dt-border-strong: rgba(255, 255, 255, 0.16);
+    --dt-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    --dt-shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.35);
+    --dt-add: rgba(52, 211, 153, 0.18);
+    --dt-add-ink: #6ee7b7;
+    --dt-del: rgba(248, 113, 113, 0.18);
+    --dt-del-ink: #fca5a5;
+  }
+}
+
+html.dark .dt-sheet-root,
+html[data-theme="dark"] .dt-sheet-root {
+  --dt-accent: #818cf8;
+  --dt-accent-strong: #6366f1;
+  --dt-accent-soft: rgba(129, 140, 248, 0.16);
+  --dt-surface: #191c24;
+  --dt-surface-2: #21242e;
+  --dt-surface-3: #2a2e3a;
+  --dt-text: #eef0f6;
+  --dt-text-soft: #a8aec1;
+  --dt-text-faint: #7d8398;
+  --dt-border: rgba(255, 255, 255, 0.1);
+  --dt-border-strong: rgba(255, 255, 255, 0.16);
+  --dt-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --dt-shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --dt-add: rgba(52, 211, 153, 0.18);
+  --dt-add-ink: #6ee7b7;
+  --dt-del: rgba(248, 113, 113, 0.18);
+  --dt-del-ink: #fca5a5;
+}
+
+/* ---------------- 遮罩 ---------------- */
+
+.dt-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(12, 15, 24, 0.46);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  touch-action: none;
+}
+
+.dt-sheet-root.is-open .dt-backdrop {
+  opacity: 1;
+}
+
+/* ---------------- 面板本体 ---------------- */
+
+.dt-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  max-height: calc(100vh - var(--dt-inset-top) - var(--dt-inset-bottom) - 24px);
+  display: flex;
+  flex-direction: column;
+  background: var(--dt-surface);
+  border: 1px solid var(--dt-border);
+  border-bottom: none;
+  border-radius: var(--dt-radius) var(--dt-radius) 0 0;
+  box-shadow: var(--dt-shadow);
+  transform: translateY(18px);
+  opacity: 0;
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.dt-sheet-root.is-open .dt-sheet {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+@media (min-width: 700px) {
+  .dt-sheet-root {
+    align-items: center;
+    padding: 24px;
+  }
+
+  .dt-sheet {
+    border-bottom: 1px solid var(--dt-border);
+    border-radius: var(--dt-radius);
+    max-height: calc(100vh - 48px);
+  }
+}
+
+/* ---------------- 头部 ---------------- */
+
+.dt-sheet__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--dt-border);
+  background: var(--dt-surface);
+}
+
+.dt-sheet__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-sheet__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.dt-sheet__subtitle {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--dt-text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-sheet__undo {
+  align-self: center;
+  flex: none;
+}
+
+.dt-icon-btn {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dt-text-soft);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dt-icon-btn:hover {
+  background: var(--dt-surface-3);
+  color: var(--dt-text);
+}
+
+/* ---------------- 主体 ---------------- */
+
+.dt-sheet__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+}
+
+.dt-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 输入区 */
+
+.dt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dt-field__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dt-text-soft);
+}
+
+.dt-textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+  padding: 11px 12px;
+  border-radius: var(--dt-radius-sm);
+  border: 1px solid var(--dt-border-strong);
+  background: var(--dt-surface-2);
+  color: var(--dt-text);
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.55;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.dt-textarea::placeholder {
+  color: var(--dt-text-faint);
+}
+
+.dt-textarea:focus {
+  border-color: var(--dt-accent);
+  background: var(--dt-surface);
+  box-shadow: 0 0 0 3px var(--dt-accent-soft);
+}
+
+/* 开关行 */
+
+.dt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius-sm);
+  background: var(--dt-surface-2);
+}
+
+.dt-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dt-row__label {
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.dt-row__hint {
+  font-size: 12px;
+  color: var(--dt-text-faint);
+  line-height: 1.45;
+}
+
+/* 开关 */
+
+.dt-switch {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 27px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--dt-surface-3);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.dt-switch__knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 21px;
+  height: 21px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dt-switch.is-on {
+  background: var(--dt-accent);
+}
+
+.dt-switch.is-on .dt-switch__knob {
+  transform: translateX(19px);
+}
+
+/* 数字步进器 */
+
+.dt-stepper {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--dt-surface-3);
+}
+
+.dt-stepper__btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dt-text-soft);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dt-stepper__btn:hover {
+  background: var(--dt-surface);
+  color: var(--dt-text);
+}
+
+.dt-stepper__input {
+  width: 40px;
+  border: none;
+  background: transparent;
+  color: var(--dt-text);
+  text-align: center;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.dt-stepper__input::-webkit-outer-spin-button,
+.dt-stepper__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.dt-stepper__unit {
+  font-size: 12px;
+  color: var(--dt-text-faint);
+  padding-right: 8px;
+}
+
+/* 提示 */
+
+.dt-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dt-text-faint);
+}
+
+.dt-note.is-error,
+.dt-note--error {
+  color: var(--dt-del-ink);
+}
+
+/* ---------------- 预览 ---------------- */
+
+.dt-cands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dt-cands:empty {
+  display: none;
+}
+
+.dt-chip {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--dt-border-strong);
+  border-radius: 999px;
+  background: var(--dt-surface-2);
+  color: var(--dt-text-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dt-chip:hover {
+  border-color: var(--dt-accent);
+  color: var(--dt-text);
+}
+
+.dt-chip.is-active {
+  background: var(--dt-accent);
+  border-color: var(--dt-accent);
+  color: #fff;
+}
+
+.dt-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dt-diff__block {
+  border: 1px solid var(--dt-border);
+  border-radius: var(--dt-radius-sm);
+  overflow: hidden;
+  background: var(--dt-surface-2);
+}
+
+.dt-diff__head {
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--dt-text-soft);
+  background: var(--dt-surface-3);
+  border-bottom: 1px solid var(--dt-border);
+}
+
+.dt-diff__body {
+  padding: 11px 12px;
+  font-size: 14px;
+  line-height: 1.62;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+.dt-diff__body--tuned {
+  background: var(--dt-surface);
+}
+
+.dt-diff__add {
+  background: var(--dt-add);
+  color: var(--dt-add-ink);
+  border-radius: 3px;
+  padding: 1px 0;
+  box-shadow: 0 0 0 1px var(--dt-add);
+}
+
+.dt-diff__del {
+  background: var(--dt-del);
+  color: var(--dt-del-ink);
+  border-radius: 3px;
+  padding: 1px 0;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  opacity: 0.85;
+}
+
+/* ---------------- 底部按钮 ---------------- */
+
+.dt-sheet__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--dt-border);
+  background: var(--dt-surface);
+}
+
+.dt-foot__left,
+.dt-foot__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dt-foot__right {
+  margin-left: auto;
+}
+
+.dt-primary-btn,
+.dt-ghost-btn {
+  appearance: none;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    opacity 0.15s ease, transform 0.08s ease;
+}
+
+.dt-primary-btn {
+  border: 1px solid transparent;
+  background: var(--dt-accent);
+  color: #fff;
+  box-shadow: var(--dt-shadow-soft);
+}
+
+.dt-primary-btn:hover:not(:disabled) {
+  background: var(--dt-accent-strong);
+}
+
+.dt-primary-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.dt-ghost-btn {
+  border: 1px solid var(--dt-border-strong);
+  background: transparent;
+  color: var(--dt-text-soft);
+}
+
+.dt-ghost-btn:hover:not(:disabled) {
+  background: var(--dt-surface-3);
+  color: var(--dt-text);
+}
+
+.dt-primary-btn:disabled,
+.dt-ghost-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ---------------- 长按浮标 ---------------- */
+
+.dt-pill {
+  position: fixed;
+  z-index: 2147482900;
+  animation: dt-pill-in 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes dt-pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dt-pill__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px 0 10px;
+  border: 1px solid var(--dt-border-strong);
+  border-radius: 999px;
+  background: var(--dt-surface);
+  color: var(--dt-text);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(14, 17, 27, 0.22);
+}
+
+.dt-pill__icon {
+  display: inline-flex;
+  color: var(--dt-accent);
+}
+
+.dt-hidden-copy {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  opacity: 0;
+}
+
+/* ---------------- 无障碍 ---------------- */
+
+.dt-sheet-root :focus-visible {
+  outline: 2px solid var(--dt-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-sheet,
+  .dt-backdrop,
+  .dt-pill,
+  .dt-switch__knob {
+    transition: none !important;
+    animation: none !important;
+  }
+}
