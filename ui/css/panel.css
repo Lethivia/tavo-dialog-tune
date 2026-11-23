@@ -538,6 +538,70 @@ html[data-theme="dark"] .dt-sheet-root {
   opacity: 0.85;
 }
 
+/* 思考模式行：模型族 + 档位 */
+.dt-row--thinking {
+  flex-wrap: wrap;
+}
+
+.dt-row__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.dt-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 7px 26px 7px 10px;
+  border: 1px solid var(--dt-border-strong);
+  border-radius: 999px;
+  background-color: var(--dt-surface);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--dt-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dt-field--custom {
+  margin-top: 2px;
+}
+
+.dt-textarea--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  min-height: 64px;
+}
+
+/* 生成中的状态行：实时计时，缓解「是不是卡死了」 */
+.dt-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--dt-radius-sm);
+  background: var(--dt-accent-soft);
+  border: 1px solid var(--dt-accent-line);
+  font-size: 13px;
+  color: var(--dt-text-soft);
+}
+
+.dt-status[hidden] {
+  display: none;
+}
+
+.dt-status__timer {
+  font-variant-numeric: tabular-nums;
+  color: var(--dt-accent-ink);
+  font-weight: 600;
+}
+
 /* 差异统计：一眼看出改了多少，也区分「没有差异」与「高亮失效」 */
 .dt-diff__head {
   display: flex;

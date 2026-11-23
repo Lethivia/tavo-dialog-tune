@@ -160,6 +160,9 @@
       maxRecentN: clamp(toInt(cfg('maxRecentN', 50), 50), 0, 200),
       autoApply: cfg('autoApply', false) === true,
       contentLanguage: String(cfg('contentLanguage', 'source')),
+      thinkingFamily: String(cfg('thinkingFamily', 'openai')),
+      thinkingPlacement: String(cfg('thinkingPlacement', 'extraBody')),
+      thinkingCustomBody: String(cfg('thinkingCustomBody', '')),
       guidePrompt: String(cfg('guidePrompt', ''))
     };
   }
@@ -254,6 +257,184 @@
     var insets = readInsets();
     state.dom.root.style.setProperty('--dt-inset-top', (insets.topBar || 0) + 'px');
     state.dom.root.style.setProperty('--dt-inset-bottom', (insets.bottomInput || 0) + 'px');
+  }
+
+  /* =========================================================
+   * 思考模式：模型族 → 档位 → 请求参数
+   *
+   * 只影响「微调」这一次请求（tavo.generate 的 settings 是逐请求覆盖），
+   * 不会改动用户自己的 API 设置。
+   * ======================================================= */
+
+  /**
+   * 每个模型族的思考参数。
+   *
+   * 全部按各家官方文档逐条核对（README「思考模式」一节附了链接）：
+   *   DeepSeek   api-docs.deepseek.com/guides/thinking_mode/
+   *   智谱 GLM   docs.bigmodel.cn/cn/guide/capabilities/thinking
+   *   小米 MiMo   mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md
+   *   OpenAI     platform.openai.com/docs/guides/reasoning
+   *   Anthropic  platform.claude.com/docs/en/build-with-claude/thinking
+   *   Gemini     ai.google.dev/gemini-api/docs/thinking
+   *   xAI Grok   docs.x.ai/developers/model-capabilities/text/reasoning
+   *   Kimi       platform.kimi.ai/docs/guide/use-reasoning-effort
+   *   Qwen       alibabacloud.com/help/en/model-studio/deep-thinking
+   *
+   * 注意各家「关闭思考」的语义并不统一（disabled / none / minimal / 省略参数），
+   * 不能跨厂商复用同一个值；强制思考的型号干脆不提供关闭项（否则 400）。
+   */
+  var THINKING_PROFILES = {
+    openai: {
+      doc: 'https://platform.openai.com/docs/guides/reasoning',
+      levels: [
+        { key: 'off', body: { reasoning_effort: 'none' } },
+        { key: 'minimal', body: { reasoning_effort: 'minimal' } },
+        { key: 'low', body: { reasoning_effort: 'low' } },
+        { key: 'medium', body: { reasoning_effort: 'medium' } },
+        { key: 'high', body: { reasoning_effort: 'high' } },
+        { key: 'xhigh', body: { reasoning_effort: 'xhigh' } }
+      ]
+    },
+    deepseek: {
+      doc: 'https://api-docs.deepseek.com/guides/thinking_mode/',
+      levels: [
+        { key: 'off', body: { thinking: { type: 'disabled' } } },
+        { key: 'low', body: { thinking: { type: 'enabled' }, reasoning_effort: 'low' } },
+        { key: 'high', body: { thinking: { type: 'enabled' }, reasoning_effort: 'high' } },
+        { key: 'max', body: { thinking: { type: 'enabled' }, reasoning_effort: 'max' } }
+      ]
+    },
+    glm: {
+      doc: 'https://docs.bigmodel.cn/cn/guide/capabilities/thinking',
+      /* GLM-5.3 强制思考：官方明确 disabled 会 400，故不提供关闭项 */
+      levels: [
+        { key: 'low', body: { thinking: { type: 'enabled' }, reasoning_effort: 'low' } },
+        { key: 'high', body: { thinking: { type: 'enabled' }, reasoning_effort: 'high' } },
+        { key: 'max', body: { thinking: { type: 'enabled' }, reasoning_effort: 'max' } }
+      ]
+    },
+    mimo: {
+      doc: 'https://mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md',
+      /* 官方 Chat 端点只有开关，没有 reasoning_effort */
+      levels: [
+        { key: 'off', body: { thinking: { type: 'disabled' } } },
+        { key: 'on', body: { thinking: { type: 'enabled' } } }
+      ]
+    },
+    anthropic: {
+      doc: 'https://platform.claude.com/docs/en/build-with-claude/thinking',
+      levels: [
+        /* 4.6–4.8 不传 thinking 即为关闭；5.x 会 400，用手册里的手动 JSON 更稳 */
+        { key: 'off', body: {} },
+        { key: 'low', body: { thinking: { type: 'adaptive' }, output_config: { effort: 'low' } } },
+        { key: 'medium', body: { thinking: { type: 'adaptive' }, output_config: { effort: 'medium' } } },
+        { key: 'high', body: { thinking: { type: 'adaptive' }, output_config: { effort: 'high' } } },
+        { key: 'xhigh', body: { thinking: { type: 'adaptive' }, output_config: { effort: 'xhigh' } } },
+        { key: 'max', body: { thinking: { type: 'adaptive' }, output_config: { effort: 'max' } } }
+      ]
+    },
+    gemini: {
+      doc: 'https://ai.google.dev/gemini-api/docs/thinking',
+      /* 这里用经典 generateContent 的驼峰写法；Interactions API 是 snake_case，
+         需要时用面板里的手动 JSON 直接填 */
+      levels: [
+        { key: 'minimal', body: { generationConfig: { thinkingConfig: { thinkingLevel: 'MINIMAL' } } } },
+        { key: 'low', body: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } } },
+        { key: 'medium', body: { generationConfig: { thinkingConfig: { thinkingLevel: 'MEDIUM' } } } },
+        { key: 'high', body: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } } },
+        { key: 'xhigh', body: { generationConfig: { thinkingConfig: { thinkingLevel: 'XHIGH' } } } }
+      ]
+    },
+    grok: {
+      doc: 'https://docs.x.ai/developers/model-capabilities/text/reasoning',
+      /* 官方原文：Reasoning cannot be disabled */
+      levels: [
+        { key: 'low', body: { reasoning_effort: 'low' } },
+        { key: 'medium', body: { reasoning_effort: 'medium' } },
+        { key: 'high', body: { reasoning_effort: 'high' } },
+        { key: 'xhigh', body: { reasoning_effort: 'xhigh' } }
+      ]
+    },
+    kimi: {
+      doc: 'https://platform.kimi.ai/docs/guide/use-reasoning-effort',
+      /* K3 系列不支持 thinking，改用顶层 reasoning_effort，且思考恒开 */
+      levels: [
+        { key: 'low', body: { reasoning_effort: 'low' } },
+        { key: 'high', body: { reasoning_effort: 'high' } },
+        { key: 'max', body: { reasoning_effort: 'max' } }
+      ]
+    },
+    qwen: {
+      doc: 'https://www.alibabacloud.com/help/en/model-studio/deep-thinking',
+      levels: [
+        { key: 'off', body: { enable_thinking: false } },
+        { key: 'minimal', body: { enable_thinking: true, reasoning_effort: 'minimal' } },
+        { key: 'low', body: { enable_thinking: true, reasoning_effort: 'low' } },
+        { key: 'medium', body: { enable_thinking: true, reasoning_effort: 'medium' } },
+        { key: 'high', body: { enable_thinking: true, reasoning_effort: 'high' } },
+        { key: 'xhigh', body: { enable_thinking: true, reasoning_effort: 'xhigh' } }
+      ]
+    }
+  };
+
+  /** 按模型族填充档位下拉：各家的档位枚举不同，强制思考的型号也不提供关闭项 */
+  function fillThinkingLevels(family, current) {
+    var dom = state.dom;
+    if (!dom || !dom.levelSelect) return;
+    var profile = THINKING_PROFILES[family];
+    dom.levelSelect.textContent = '';
+    var keys = [];
+    if (profile) {
+      for (var i = 0; i < profile.levels.length; i++) keys.push(profile.levels[i].key);
+    }
+    keys.push('custom');
+    for (var j = 0; j < keys.length; j++) {
+      var option = el('option', '', t('runtime.thinking.level.' + keys[j]));
+      option.value = keys[j];
+      dom.levelSelect.appendChild(option);
+    }
+    var valid = false;
+    for (var k = 0; k < keys.length; k++) {
+      if (keys[k] === current) valid = true;
+    }
+    dom.levelSelect.value = valid ? current : keys[0];
+    return dom.levelSelect.value;
+  }
+
+  /** 取某个模型族某一档位对应的请求字段 */
+  function thinkingLevelBody(family, level) {
+    var profile = THINKING_PROFILES[family];
+    if (!profile || !level) return {};
+    for (var i = 0; i < profile.levels.length; i++) {
+      if (profile.levels[i].key === level) return profile.levels[i].body || {};
+    }
+    return {};
+  }
+
+  /** 该模型族是否提供「关闭思考」这一档（强制思考的型号没有） */
+  function familySupportsOff(family) {
+    var profile = THINKING_PROFILES[family];
+    if (!profile) return false;
+    for (var i = 0; i < profile.levels.length; i++) {
+      if (profile.levels[i].key === 'off') return true;
+    }
+    return false;
+  }
+
+  /** 解析思考参数（返回要并入 settings 的对象） */
+  function resolveThinkingBody(level, family, customJson) {
+    if (!level || level === 'off') return {};
+    if (level === 'custom') {
+      var raw = String(customJson || '').trim();
+      if (!raw) return {};
+      try {
+        var parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch (error) {
+        return {};
+      }
+    }
+    return thinkingLevelBody(family, level);
   }
 
   /* =========================================================
@@ -781,12 +962,54 @@
     recentRow.appendChild(recentInfo);
     recentRow.appendChild(stepper);
 
+    /* 思考模式：模型族 + 档位（已知族直接给选项，未知族给手动 JSON） */
+    var thinkingRow = el('div', 'dt-row dt-row--thinking');
+    var thinkingInfo = el('div', 'dt-row__info');
+    var thinkingLabel = el('span', 'dt-row__label', t('runtime.thinking.label'));
+    thinkingLabel.setAttribute('data-dt-t', 'runtime.thinking.label');
+    var thinkingHint = el('span', 'dt-row__hint', t('runtime.thinking.hint'));
+    thinkingHint.setAttribute('data-dt-t', 'runtime.thinking.hint');
+    thinkingInfo.appendChild(thinkingLabel);
+    thinkingInfo.appendChild(thinkingHint);
+
+    var thinkingControls = el('div', 'dt-row__controls');
+    var familySelect = el('select', 'dt-select');
+    var levelSelect = el('select', 'dt-select');
+    var FAMILY_KEYS = [
+      'openai', 'deepseek', 'glm', 'mimo', 'anthropic', 'gemini', 'grok', 'kimi', 'qwen', 'custom'
+    ];
+    FAMILY_KEYS.forEach(function (key) {
+      var option = el('option', '', t('runtime.thinking.family.' + key));
+      option.value = key;
+      familySelect.appendChild(option);
+    });
+    familySelect.setAttribute('aria-label', t('runtime.thinking.label'));
+    levelSelect.setAttribute('aria-label', t('runtime.thinking.level.label'));
+    thinkingControls.appendChild(familySelect);
+    thinkingControls.appendChild(levelSelect);
+    thinkingRow.appendChild(thinkingInfo);
+    thinkingRow.appendChild(thinkingControls);
+
+    /* 手动填写 HTTP body */
+    var customField = el('label', 'dt-field dt-field--custom');
+    var customLabel = el('span', 'dt-field__label', t('runtime.thinking.custom.label'));
+    customLabel.setAttribute('data-dt-t', 'runtime.thinking.custom.label');
+    var customArea = el('textarea', 'dt-textarea dt-textarea--mono');
+    customArea.rows = 3;
+    customArea.placeholder = t('runtime.thinking.custom.placeholder');
+    customArea.setAttribute('data-dt-t-ph', 'runtime.thinking.custom.placeholder');
+    customField.appendChild(customLabel);
+    customField.appendChild(customArea);
+    customField.hidden = true;
+
     var privacy = el('p', 'dt-note', t('runtime.privacy'));
     privacy.setAttribute('data-dt-t', 'runtime.privacy');
 
     var switches = el('div', 'dt-switches');
     switches.appendChild(memoryRow);
     switches.appendChild(recentRow);
+    switches.appendChild(thinkingRow);
+    switches.appendChild(customField);
     switches.appendChild(privacy);
 
     controls.appendChild(field);
@@ -799,6 +1022,14 @@
     var cands = el('div', 'dt-cands');
     var previewError = el('p', 'dt-note dt-note--error');
     previewError.hidden = true;
+
+    /* 生成中的状态行：实时计时 + 提示，避免"是不是卡死了"的疑惑 */
+    var status = el('div', 'dt-status');
+    status.hidden = true;
+    var statusText = el('span', 'dt-status__text');
+    var statusTimer = el('span', 'dt-status__timer');
+    status.appendChild(statusText);
+    status.appendChild(statusTimer);
     var diffWrap = el('div', 'dt-diff');
     var tunedBlock = el('div', 'dt-diff__block');
     var diffHead = el('div', 'dt-diff__head');
@@ -812,6 +1043,7 @@
     tunedBlock.appendChild(tunedBody);
 
     diffWrap.appendChild(tunedBlock);
+    preview.appendChild(status);
     preview.appendChild(previewError);
     preview.appendChild(cands);
     preview.appendChild(diffWrap);
@@ -849,6 +1081,10 @@
       preview: preview,
       textarea: textarea,
       memorySwitch: memorySwitch,
+      familySelect: familySelect,
+      levelSelect: levelSelect,
+      customArea: customArea,
+      customField: customField,
       recentHint: recentHint,
       number: number,
       minus: minus,
@@ -857,6 +1093,9 @@
       privacy: privacy,
       cands: cands,
       previewError: previewError,
+      status: status,
+      statusText: statusText,
+      statusTimer: statusTimer,
       diffStat: diffStat,
       tunedBody: tunedBody,
       footLeft: footLeft,
@@ -962,6 +1201,21 @@
       render();
     }
 
+    dom.familySelect.addEventListener('change', function () {
+      if (!state.model) return;
+      state.model.thinkingFamily = dom.familySelect.value;
+      var level = fillThinkingLevels(state.model.thinkingFamily, state.model.thinkingLevel);
+      state.model.thinkingLevel = level;
+      render();
+    });
+    dom.levelSelect.addEventListener('change', function () {
+      if (state.model) state.model.thinkingLevel = dom.levelSelect.value;
+      render();
+    });
+    dom.customArea.addEventListener('input', function () {
+      if (state.model) state.model.thinkingCustom = dom.customArea.value;
+    });
+
     dom.number.addEventListener('change', commitRecent);
     dom.number.addEventListener('blur', commitRecent);
     dom.minus.addEventListener('click', function () {
@@ -1045,6 +1299,13 @@
 
     dom.subtitle.textContent = model.target.label;
 
+    if (model.busy) {
+      dom.status.hidden = false;
+      dom.statusText.textContent = t('runtime.status.generating');
+    } else {
+      dom.status.hidden = true;
+    }
+
     var max = settings().maxRecentN;
     dom.number.max = String(max);
     /* 正在输入时不要覆盖玩家键入的值 */
@@ -1054,6 +1315,14 @@
     dom.memorySwitch.setAttribute('aria-checked', model.useMemory ? 'true' : 'false');
     dom.memorySwitch.classList.toggle('is-on', model.useMemory);
     dom.recentHint.textContent = t('runtime.switch.recentHint');
+    dom.familySelect.value = model.thinkingFamily || 'openai';
+    /* 档位可能因模型族不同而变化（各家枚举不同），确保下拉与模型一致 */
+    var level = fillThinkingLevels(model.thinkingFamily || 'openai', model.thinkingLevel);
+    model.thinkingLevel = level;
+    dom.customField.hidden = model.thinkingLevel !== 'custom';
+    if (document.activeElement !== dom.customArea) {
+      dom.customArea.value = model.thinkingCustom || '';
+    }
     dom.privacy.textContent = t('runtime.privacy');
 
     closeMenu();
@@ -1274,6 +1543,9 @@
           instruction: '',
           useMemory: state.prefs.useMemory,
           recentN: clamp(state.prefs.recentN, 0, conf.maxRecentN),
+          thinkingFamily: conf.thinkingFamily,
+          thinkingLevel: 'off',
+          thinkingCustom: conf.thinkingCustomBody || '',
           stage: 'compose',
           candidates: [],
           activeIndex: 0,
@@ -1334,17 +1606,54 @@
     runGenerate(false);
   }
 
+  /** 生成期间的状态行：显示已等待时长 */
+  function startStatusTimer() {
+    stopStatusTimer();
+    var started = Date.now();
+    state.statusTimer = setInterval(function () {
+      if (!state.dom) return;
+      var seconds = Math.round((Date.now() - started) / 1000);
+      state.dom.statusTimer.textContent = t('runtime.status.waiting', { seconds: seconds });
+    }, 1000);
+  }
+
+  function stopStatusTimer() {
+    if (state.statusTimer) {
+      clearInterval(state.statusTimer);
+      state.statusTimer = null;
+    }
+    if (state.dom) {
+      state.dom.status.hidden = true;
+      state.dom.statusTimer.textContent = '';
+    }
+  }
+
   function runGenerate(isReroll) {
     var model = state.model;
     if (!model || model.busy) return;
     model.busy = true;
     model.error = null;
     render();
+    startStatusTimer();
 
     buildPrompt(model)
       .then(function (prompt) {
         /* 不设超时：等不及的玩家会自己取消，由玩家决定节奏 */
-        return tavo.generate(prompt, { context: false });
+        var options = { context: false };
+        var extra = resolveThinkingBody(
+          model.thinkingLevel,
+          model.thinkingFamily,
+          model.thinkingCustom
+        );
+        if (extra && Object.keys(extra).length) {
+          /* 只覆盖这一次请求的模型参数，不动用户自己的 API 设置 */
+          var placement = settings().thinkingPlacement;
+          options.settings =
+            placement === 'flat'
+              ? extra
+              : { extraBody: extra };
+        }
+        return tavo.generate(prompt, options);
       })
       .then(function (text) {
         /* 期间可能已经切换了目标（面板被重新打开），这时结果没有归属，丢弃并提示 */
@@ -1368,12 +1677,39 @@
           tavo.utils.toast(t('error.targetChanged'));
           return;
         }
-        model.error = (error && error.message) ? error.message : t('error.generateFailed');
+        var message = (error && error.message) ? error.message : t('error.generateFailed');
+        /* 思考参数是未文档化能力：若模型侧报错，多半是它不认这个字段 */
+        if (model.thinkingLevel && model.thinkingLevel !== 'off' && looksLikeParamRejection(message)) {
+          model.error = t('error.thinkingParamRejected', { detail: message });
+        } else {
+          model.error = message;
+        }
       })
       .then(function () {
         model.busy = false;
+        stopStatusTimer();
         render();
       });
+  }
+
+  /** 判断报错是否像是「模型不认这个参数」 */
+  function looksLikeParamRejection(message) {
+    var text = String(message || '').toLowerCase();
+    var hints = [
+      'unsupported',
+      'unrecognized',
+      'unknown',
+      'invalid_request_error',
+      'unexpected',
+      'not permitted',
+      'extra_body',
+      'reasoning_effort',
+      'thinking'
+    ];
+    for (var i = 0; i < hints.length; i++) {
+      if (text.indexOf(hints[i]) >= 0) return true;
+    }
+    return false;
   }
 
   function currentText() {

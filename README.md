@@ -158,6 +158,51 @@ Tavo 原生的长按气泡菜单（复制 / 改写 / 回溯 / 删除 / 隐藏 / 
 
 面板统一由聊天页承载，因此无论从哪个入口进来，都会贴在屏幕底部、铺满可操作区域。
 
+## 思考模式（仅对微调生效）
+
+微调面板里多了一行「思考模式」：**模型族 + 档位**。选中后，这次微调请求会带上对应的思考参数。
+
+- **只影响这一次 `tavo.generate` 请求**（`settings` 是逐请求覆盖），**不会改动你自己的 API 设置**，普通对话完全不受影响。
+- 已知模型族直接给**开关 / 档位**；不认识的型号选「其它」后可以**手填 HTTP body**（例如 `{"reasoning_effort": "low"}`）。
+- 各家「关闭思考」的语义不统一（`disabled` / `none` / `minimal` / 省略参数），**强制思考的型号不提供关闭档**（官方说明传 `disabled` 会 400）。
+
+### 各模型族的参数（按官方文档逐条核对）
+
+| 模型族 | 请求字段 | 档位 | 官方文档 |
+| --- | --- | --- | --- |
+| OpenAI 兼容 | `reasoning_effort` | none / minimal / low / medium / high / xhigh | [platform.openai.com](https://platform.openai.com/docs/guides/reasoning) |
+| DeepSeek | `thinking.type` + `reasoning_effort` | 关闭 / low / high / max | [api-docs.deepseek.com](https://api-docs.deepseek.com/guides/thinking_mode/) |
+| 智谱 GLM | `thinking.type` + `reasoning_effort`（5.3 强制思考） | low / high / max | [docs.bigmodel.cn](https://docs.bigmodel.cn/cn/guide/capabilities/thinking) |
+| 小米 MiMo | `thinking.type` | 开启 / 关闭 | [mimo.mi.com](https://mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md) |
+| Anthropic | `thinking.type:adaptive` + `output_config.effort` | low / medium / high / xhigh / max | [platform.claude.com](https://platform.claude.com/docs/en/build-with-claude/thinking) |
+| Google Gemini | `generationConfig.thinkingConfig.thinkingLevel` | minimal / low / medium / high / xhigh | [ai.google.dev](https://ai.google.dev/gemini-api/docs/thinking) |
+| xAI Grok | `reasoning_effort`（不可关） | low / medium / high / xhigh | [docs.x.ai](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
+| Kimi K3 | `reasoning_effort`（不可关） | low / high / max | [platform.kimi.ai](https://platform.kimi.ai/docs/guide/use-reasoning-effort) |
+| 阿里 Qwen / 百炼 | `enable_thinking` + `reasoning_effort` | 关闭 / minimal / low / medium / high / xhigh | [alibabacloud.com](https://www.alibabacloud.com/help/en/model-studio/deep-thinking) |
+
+### ⚠️ 一个必须说清的限制
+
+**文本生成的 `settings` 能不能透传任意字段，官方文档没有写死**：
+
+- ✅ 文档明确：`tavo.generate(prompt, { settings })` 会「覆盖本次请求的模型参数」；
+- ✅ App 自己的「API 连接 → 参数设置」页明确支持「自定义配置…填写或调整各项参数值」；
+- ✅ 插件接口在**生图**上有明确的 `extraBody`（"透传到平台 API 的额外字段"）；
+- ⚠️ 但**文本生成**只列了 temperature / topP / maxCompletionTokens，且**已上架插件清一色只用这几个白名单键**——没人证明过额外键能透传。
+
+所以插件做了三件兜底的事：
+
+1. 设置里可切换**参数放置位置**：`extraBody`（默认，与官方生图接口一致）/ 顶层（直接放在本次请求的模型参数里）；
+2. 手填 JSON 兜底，**填错 JSON 会被忽略而不是让请求失败**；
+3. 如果模型侧报错并疑似是「不认这个字段」，面板会给出**可操作的提示**（换放置位置或关掉思考模式），而不是一句干巴巴的失败。
+
+**请在你的设备上实测一次**：面板里选「OpenAI 兼容 + 低」→ 微调一次 → 看模型是否真的思考了（明显更慢或回复带推理痕迹）。**如果不生效**，把设置里的「参数放置位置」换成「顶层」再试；**两种都不通**的话，说明官方插件接口确实没开这个口子，我会据实说明并把该功能退回为提示。
+
+### 思考过程为什么显示不出来
+
+`tavo.generate` 是**一次性请求，返回完整文本，不返回流式分片**，`reasoning` 字段只存在于 App 自己的消息结构里，插件拿不到思考内容；而且插件也**读不到当前会话用的是哪个模型**（没有 `tavo.api` / `tavo.model` 这样的命名空间），所以无法自动判断该不该开思考。
+
+替代方案：生成时显示**实时计时状态行**（"正在生成… 已等待 12 秒"），至少不会让人以为卡死。
+
 ## 项目结构
 
 ```

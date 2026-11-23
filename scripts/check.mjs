@@ -107,7 +107,11 @@ function walkJs(dir) {
     const source = readFileSync(full, 'utf8');
     const pattern = /\bt\(\s*['"]([^'"]+)['"]/g;
     let match;
-    while ((match = pattern.exec(source)) !== null) jsKeys.add(match[1]);
+    while ((match = pattern.exec(source)) !== null) {
+      /* 以 . 结尾的是运行时拼接的前缀（如 'runtime.thinking.family.' + key），跳过 */
+      if (match[1].endsWith('.')) continue;
+      jsKeys.add(match[1]);
+    }
   }
 }
 walkJs(resolve(ROOT, 'ui/js'));

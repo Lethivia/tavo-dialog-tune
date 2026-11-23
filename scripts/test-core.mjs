@@ -595,5 +595,165 @@ console.log('\n20. 退化与规模');
   assert(perfSegs.length <= 700, '1 万字场景分段数在上限内', String(perfSegs.length));
 }
 
+/* 21. 思考模式：只影响微调这一次请求 */
+console.log('\n21. 思考模式');
+{
+  const levelSelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(2)');
+  const familySelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(1)');
+
+  /* 默认关闭：不往请求里塞任何东西 */
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  assert(!!levelSelect(), '面板上有思考模式控件');
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  let options = store.generated[store.generated.length - 1].options;
+  assert(!options.settings, '默认（关闭思考）不会往请求里加任何参数', JSON.stringify(options));
+
+  /* 选模型族 + 档位 → 生成对应参数，且只放在这一次请求里 */
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  familySelect().value = 'openai';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  levelSelect().value = 'low';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  options = store.generated[store.generated.length - 1].options;
+  assert(
+    options.settings && options.settings.extraBody &&
+      options.settings.extraBody.reasoning_effort === 'low',
+    '已知模型族按档位生成参数（OpenAI 兼容 → reasoning_effort）',
+    JSON.stringify(options)
+  );
+
+  /* 自定义 JSON：面板里直接填 */
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  levelSelect().value = 'custom';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  const customArea = window.document.querySelector('.dt-textarea--mono');
+  assert(!!customArea && !customArea.parentNode.hidden, '选「自定义 JSON」后出现手动输入框');
+  customArea.value = '{"reasoning_effort": "medium", "foo": 1}';
+  customArea.dispatchEvent(new window.Event('input', { bubbles: true }));
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  options = store.generated[store.generated.length - 1].options;
+  assert(
+    options.settings &&
+      options.settings.extraBody &&
+      options.settings.extraBody.reasoning_effort === 'medium' &&
+      options.settings.extraBody.foo === 1,
+    '手动填的 JSON 原样进入请求',
+    JSON.stringify(options)
+  );
+
+  /* 非法 JSON 不应让请求炸掉 */
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  levelSelect().value = 'custom';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  const badArea = window.document.querySelector('.dt-textarea--mono');
+  badArea.value = '{不是合法 JSON';
+  badArea.dispatchEvent(new window.Event('input', { bubbles: true }));
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  options = store.generated[store.generated.length - 1].options;
+  assert(store.generated.length > 0, '手写非法 JSON 时仍然正常发起请求');
+  assert(!options.settings || !options.settings.extraBody, '非法 JSON 被忽略，不会污染请求');
+}
+
+/* 22. 各模型族的档位必须按官方枚举给出 */
+console.log('\n22. 各模型族的档位');
+{
+  const familySelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(1)');
+  const levelSelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(2)');
+  const levelsOf = () =>
+    Array.from(levelSelect().options).map((o) => o.value).filter((v) => v !== 'custom');
+
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+
+  familySelect().value = 'glm';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  assert(
+    !levelsOf().includes('off'),
+    'GLM-5.3 强制思考：不提供「关闭」档（官方说明 disabled 会 400）',
+    JSON.stringify(levelsOf())
+  );
+  assert(
+    JSON.stringify(levelsOf()) === JSON.stringify(['low', 'high', 'max']),
+    'GLM 的档位是 low/high/max',
+    JSON.stringify(levelsOf())
+  );
+
+  familySelect().value = 'mimo';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  assert(
+    JSON.stringify(levelsOf()) === JSON.stringify(['off', 'on']),
+    'MiMo 只有开/关两档（官方 Chat 端点无 reasoning_effort）',
+    JSON.stringify(levelsOf())
+  );
+
+  familySelect().value = 'kimi';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  assert(
+    JSON.stringify(levelsOf()) === JSON.stringify(['low', 'high', 'max']),
+    'Kimi K3 用顶层 reasoning_effort，且思考恒开（无关闭档）',
+    JSON.stringify(levelsOf())
+  );
+
+  familySelect().value = 'openai';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  assert(
+    levelsOf().includes('xhigh') && levelsOf().includes('minimal'),
+    'OpenAI 的档位含 minimal/xhigh',
+    JSON.stringify(levelsOf())
+  );
+
+  /* 换族后无效档位要被纠正 */
+  familySelect().value = 'mimo';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  levelSelect().value = 'high';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  familySelect().value = 'deepseek';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  assert(
+    levelsOf().includes(levelSelect().value),
+    '切换模型族后档位仍合法',
+    levelSelect().value
+  );
+
+  /* DeepSeek 的实际请求体 */
+  levelSelect().value = 'low';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  const options = store.generated[store.generated.length - 1].options;
+  assert(
+    options.settings &&
+      options.settings.extraBody &&
+      options.settings.extraBody.thinking &&
+      options.settings.extraBody.thinking.type === 'enabled' &&
+      options.settings.extraBody.reasoning_effort === 'low',
+    'DeepSeek 发出 thinking + reasoning_effort 两项',
+    JSON.stringify(options)
+  );
+}
+
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);

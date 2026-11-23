@@ -4,14 +4,14 @@
   "name": {
     "$t": "plugin.name"
   },
-  "version": "1.0.10",
+  "version": "1.1.0",
   "entry": "entry.js",
   "author": "Lethivia",
   "description": {
     "$t": "plugin.description"
   },
   "releaseNotes": {
-    "$t": "releaseNotes.1_0_10"
+    "$t": "releaseNotes.1_1_0"
   },
   "localization": {
     "defaultLocale": "en",
@@ -183,6 +183,118 @@
           ],
           "description": {
             "$t": "settings.contentLanguage.desc"
+          }
+        },
+        {
+          "type": "info",
+          "text": {
+            "$t": "settings.header.thinking"
+          },
+          "icon": "info"
+        },
+        {
+          "key": "thinkingFamily",
+          "type": "select",
+          "label": {
+            "$t": "settings.thinkingFamily"
+          },
+          "default": "openai",
+          "options": [
+            {
+              "value": "openai",
+              "label": {
+                "$t": "runtime.thinking.family.openai"
+              }
+            },
+            {
+              "value": "deepseek",
+              "label": {
+                "$t": "runtime.thinking.family.deepseek"
+              }
+            },
+            {
+              "value": "glm",
+              "label": {
+                "$t": "runtime.thinking.family.glm"
+              }
+            },
+            {
+              "value": "mimo",
+              "label": {
+                "$t": "runtime.thinking.family.mimo"
+              }
+            },
+            {
+              "value": "anthropic",
+              "label": {
+                "$t": "runtime.thinking.family.anthropic"
+              }
+            },
+            {
+              "value": "gemini",
+              "label": {
+                "$t": "runtime.thinking.family.gemini"
+              }
+            },
+            {
+              "value": "qwen",
+              "label": {
+                "$t": "runtime.thinking.family.qwen"
+              }
+            },
+            {
+              "value": "kimi",
+              "label": {
+                "$t": "runtime.thinking.family.kimi"
+              }
+            },
+            {
+              "value": "custom",
+              "label": {
+                "$t": "runtime.thinking.family.custom"
+              }
+            }
+          ]
+        },
+        {
+          "key": "thinkingCustomBody",
+          "type": "textarea",
+          "label": {
+            "$t": "settings.thinkingCustomBody"
+          },
+          "default": "",
+          "minLines": 2,
+          "maxLines": 6,
+          "placeholder": {
+            "$t": "runtime.thinking.custom.placeholder"
+          },
+          "description": {
+            "$t": "settings.thinkingCustomBody.desc"
+          }
+        },
+        {
+          "key": "thinkingPlacement",
+          "type": "select",
+          "label": {
+            "$t": "settings.thinkingPlacement"
+          },
+          "default": "extraBody",
+          "options": [
+            {
+              "value": "extraBody",
+              "label": {
+                "$t": "settings.thinkingPlacement.extraBody"
+              }
+            },
+            {
+              "value": "flat",
+              "label": {
+                "$t": "settings.thinkingPlacement.flat"
+              }
+            }
+          ],
+          "description": {
+            "$t": "settings.thinkingPlacement.desc"
           }
         }
       ]
