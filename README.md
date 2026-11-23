@@ -62,7 +62,7 @@ Tavo 1.12 支持 specVersion 2、插件包国际化与消息候选版本，版�
 若仍导入失败，按顺序排查：
 
 1. **先换扩展名**：包同时提供 `.tpg` 与 `.zip` 两份内容相同的文件。移动端文件选择器对 `.tpg` 的 MIME 识别不稳定（常被归为 `application/octet-stream` 而被过滤），官方开发指南的导入流程本身用的也是 `.zip`。优先导入 `.zip`。
-2. **再试最小包**：`dist/dialog-tune-minimal-1.0.0.zip` 只有 `manifest.json` + `entry.js`。
+2. **再试最小包**：`dist/dialog-tune-minimal-1.0.1.zip` 只有 `manifest.json` + `entry.js`。
    - 最小包也装不上 → 问题在文件传输 / 文件选择器这一层，与本插件清单无关；
    - 最小包装得上 → 问题在完整清单的某个字段，可逐项加回定位。
 3. **把 App 的原文报错发过来**：Tavo 拒绝插件时区分「缺 manifest / JSON 非法 / 路径不安全 / entry 不存在 / 字段不支持 / specVersion 不支持」多类，现在这句太泛，看不出落在哪一类。
@@ -73,8 +73,12 @@ Tavo 1.12 支持 specVersion 2、插件包国际化与消息候选版本，版�
 
 ```bash
 npm install          # 仅开发依赖（jsdom，用于跑冒烟测试）
-npm run build        # 生成图标 + 打包 dist/io.github.dialogtune.dialog-tune-1.0.0.tpg
+npm run build        # 生成图标 + 打包 dist/dialog-tune-<版本>.tpg 与同名 .zip
 ```
+
+> 同名同版本的包无法覆盖安装，重新发布时请先 `npm version minor`（或 patch）再打包；
+> `npm run build` 会自动按 `manifest.json` 里的版本号命名产物，并在打包后自检
+> 「包根目录的 manifest.json 可解析且与源文件逐字节一致」。
 
 打包脚本零依赖，内置了最小 ZIP 写入器。
 

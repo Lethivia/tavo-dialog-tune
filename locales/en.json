@@ -83,5 +83,6 @@
   "error.applyFailed": "Could not apply, the original was left untouched",
   "error.appendFailed": "Could not append the message",
   "error.noVariants": "There is no other version to switch to",
-  "runtime.moreActions": "More ways to apply"
+  "runtime.moreActions": "More ways to apply",
+  "releaseNotes.1_0_1": "## 1.0.1\n\n- Removed the generation timeout; cancel whenever you like\n- Fixed the edit-request input overflowing the screen\n- Added a loading animation while generating\n- The result now shows only the rewritten text, with the differences highlighted inline\n- Footer buttons moved into an 'Apply' dropdown so they no longer wrap on narrow screens"
 }

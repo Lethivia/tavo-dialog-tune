@@ -83,5 +83,6 @@
   "error.applyFailed": "应用失败，原文未被改动",
   "error.appendFailed": "追加消息失败",
   "error.noVariants": "没有可切换的版本",
-  "runtime.moreActions": "更多应用方式"
+  "runtime.moreActions": "更多应用方式",
+  "releaseNotes.1_0_1": "## 1.0.1 更新\n\n- 移除生成超时限制，等不及可以自行取消\n- 修复微调要求输入框超出屏幕宽度的问题\n- 「生成中」增加加载动画\n- 结果页只展示改写后的正文，差异处直接内联高亮\n- 底部按钮收进「应用到消息」的下拉菜单，窄屏不再换行"
 }

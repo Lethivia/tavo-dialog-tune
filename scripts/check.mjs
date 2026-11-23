@@ -143,6 +143,134 @@ for (const file of ['ui/panel.html', 'ui/message.html']) {
   }
 }
 
+/* ---------------- 5.5 manifest schema 逐字段校验 ---------------- */
+
+/** 文档中列出的根字段 */
+const ALLOWED_ROOT = new Set([
+  'specVersion', 'id', 'name', 'version', 'entry', 'author', 'description',
+  'releaseNotes', 'localization', 'cover', 'minAppVersion', 'permissions', 'contributes'
+]);
+
+/** 文档中列出的 contributes 字段 */
+const ALLOWED_CONTRIBUTES = new Set([
+  'inputActions', 'sidebar', 'lastMessageActions', 'htmlFragments',
+  'settings', 'visible', 'fileProcessors'
+]);
+
+const ALLOWED_ACTION_FIELDS = new Set(['id', 'label', 'icon']);
+const ALLOWED_LAST_MESSAGE_FIELDS = new Set(['id', 'label', 'icon', 'role']);
+const ALLOWED_FRAGMENT_FIELDS = new Set(['id', 'src', 'mount']);
+const ALLOWED_VISIBLE_KEYS = new Set(['inputActions', 'sidebar', 'lastMessageActions', 'chat', 'messages']);
+
+/** 设置项类型 → 允许的字段（when 为所有类型通用） */
+const SETTINGS_FIELDS = {
+  switch: new Set(['type', 'key', 'label', 'default', 'description', 'when']),
+  select: new Set(['type', 'key', 'label', 'default', 'description', 'options', 'when']),
+  slider: new Set(['type', 'key', 'label', 'min', 'max', 'step', 'default', 'description', 'when']),
+  text: new Set(['type', 'key', 'label', 'default', 'description', 'placeholder', 'when']),
+  textarea: new Set(['type', 'key', 'label', 'default', 'description', 'placeholder', 'minLines', 'maxLines', 'when']),
+  list: new Set(['type', 'key', 'label', 'items', 'default', 'description', 'fixed', 'min', 'max', 'sortable', 'when']),
+  header: new Set(['type', 'label', 'when']),
+  info: new Set(['type', 'text', 'icon', 'when']),
+  divider: new Set(['type', 'when']),
+  break: new Set(['type', 'when'])
+};
+
+for (const key of Object.keys(manifest)) {
+  if (!ALLOWED_ROOT.has(key)) fail(`manifest 出现文档未列出的根字段：${key}`);
+}
+
+const contributes = manifest.contributes || {};
+for (const key of Object.keys(contributes)) {
+  if (!ALLOWED_CONTRIBUTES.has(key)) fail(`contributes 出现文档未列出的字段：${key}`);
+}
+
+for (const [index, action] of (contributes.inputActions || []).entries()) {
+  for (const key of Object.keys(action)) {
+    if (!ALLOWED_ACTION_FIELDS.has(key)) fail(`inputActions[${index}] 出现未列出的字段：${key}`);
+  }
+  if (!action.id) fail(`inputActions[${index}] 缺少 id`);
+  if (!action.label) fail(`inputActions[${index}] 缺少 label`);
+}
+
+for (const [index, action] of (contributes.lastMessageActions || []).entries()) {
+  for (const key of Object.keys(action)) {
+    if (!ALLOWED_LAST_MESSAGE_FIELDS.has(key)) fail(`lastMessageActions[${index}] 出现未列出的字段：${key}`);
+  }
+  if (!action.id) fail(`lastMessageActions[${index}] 缺少 id`);
+  if (!action.label) fail(`lastMessageActions[${index}] 缺少 label`);
+  if (!action.icon) fail(`lastMessageActions[${index}] 缺少 icon（文档标注为必填）`);
+  if (action.role && !['character', 'user', 'any'].includes(action.role)) {
+    fail(`lastMessageActions[${index}] 的 role 只能是 character / user / any`);
+  }
+}
+
+for (const [index, fragment] of (contributes.htmlFragments || []).entries()) {
+  for (const key of Object.keys(fragment)) {
+    if (!ALLOWED_FRAGMENT_FIELDS.has(key)) fail(`htmlFragments[${index}] 出现未列出的字段：${key}`);
+  }
+  if (!fragment.id) fail(`htmlFragments[${index}] 缺少 id`);
+  if (!fragment.src) fail(`htmlFragments[${index}] 缺少 src`);
+  if (!fragment.mount || !/^\/(chat|messages)/.test(fragment.mount)) {
+    fail(`htmlFragments[${index}] 的 mount 非法：${fragment.mount}`);
+  }
+}
+
+for (const key of Object.keys(contributes.visible || {})) {
+  if (!ALLOWED_VISIBLE_KEYS.has(key)) fail(`contributes.visible 出现未列出的位置：${key}`);
+}
+
+const schema = contributes.settings?.schema || [];
+if (!Array.isArray(schema)) fail('contributes.settings.schema 必须是数组');
+const seenKeys = new Set();
+schema.forEach((item, index) => {
+  const type = item.type;
+  if (!type) {
+    fail(`settings.schema[${index}] 缺少 type`);
+    return;
+  }
+  const allowed = SETTINGS_FIELDS[type];
+  if (!allowed) {
+    fail(`settings.schema[${index}] 使用了未知的设置类型：${type}`);
+    return;
+  }
+  for (const key of Object.keys(item)) {
+    if (!allowed.has(key)) fail(`settings.schema[${index}]（${type}）出现未列出的字段：${key}`);
+  }
+  if (['switch', 'select', 'slider', 'text', 'textarea', 'list'].includes(type)) {
+    if (!item.key) fail(`settings.schema[${index}]（${type}）缺少 key`);
+    if (!item.label) fail(`settings.schema[${index}]（${type}）缺少 label`);
+    if (seenKeys.has(item.key)) fail(`设置项 key 重复：${item.key}`);
+    seenKeys.add(item.key);
+  }
+  if (type === 'slider') {
+    if (typeof item.min !== 'number' || typeof item.max !== 'number' || item.max <= item.min) {
+      fail(`settings.schema[${index}]（slider）的 min/max 不合法`);
+    }
+    if (item.step !== undefined && !(item.step > 0)) fail(`settings.schema[${index}]（slider）的 step 必须大于 0`);
+  }
+  if (type === 'textarea') {
+    const min = item.minLines === undefined ? 2 : item.minLines;
+    const max = item.maxLines === undefined ? 10 : item.maxLines;
+    if (!Number.isInteger(min) || !Number.isInteger(max) || max < min) {
+      fail(`settings.schema[${index}]（textarea）的 minLines/maxLines 不合法`);
+    }
+  }
+  if (type === 'select') {
+    if (!Array.isArray(item.options) || !item.options.length) {
+      fail(`settings.schema[${index}]（select）缺少 options`);
+    } else {
+      const values = new Set();
+      item.options.forEach((option) => {
+        const value = typeof option === 'string' ? option : option.value;
+        if (value === undefined) fail(`settings.schema[${index}]（select）存在没有 value 的选项`);
+        if (values.has(value)) fail(`settings.schema[${index}]（select）选项 value 重复：${value}`);
+        values.add(value);
+      });
+    }
+  }
+});
+
 /* ---------------- 6. 图片资源格式 ---------------- */
 
 /** 读取 PNG 尺寸；不是 PNG 返回 null */

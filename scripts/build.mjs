@@ -168,8 +168,42 @@ for (const outFile of outputs) {
   }
 }
 
+/**
+ * 打包后自检：manifest.json 必须在包根目录、且与源文件逐字节一致。
+ * Tavo 在导入时找不到根目录的 manifest.json 就会直接拒绝这个包。
+ */
+function verifyPackage(outFile) {
+  const buffer = readFileSync(outFile);
+  if (buffer.readUInt32LE(0) !== 0x04034b50) {
+    throw new Error(`${outFile} 不是合法的 zip`);
+  }
+  const nameLength = buffer.readUInt16LE(26);
+  const extraLength = buffer.readUInt16LE(28);
+  const firstName = buffer.slice(30, 30 + nameLength).toString('utf8');
+  if (firstName !== 'manifest.json') {
+    throw new Error(`包根目录第一个条目必须是 manifest.json，实际是 ${firstName}`);
+  }
+  const method = buffer.readUInt16LE(8);
+  const compressedSize = buffer.readUInt32LE(18);
+  const dataStart = 30 + nameLength + extraLength;
+  const payload = buffer.slice(dataStart, dataStart + compressedSize);
+  const raw = method === 8 ? zlib.inflateRawSync(payload) : payload;
+  const source = readFileSync(resolve(ROOT, 'manifest.json'));
+  if (!raw.equals(source)) {
+    throw new Error('包内 manifest.json 与源文件不一致');
+  }
+  const parsed = JSON.parse(raw.toString('utf8'));
+  return parsed;
+}
+
 console.log(`已打包 ${files.length} 个文件（${usedSystemZip ? '系统 zip / Info-ZIP' : '内置 ZIP 写入器'}）`);
 for (const outFile of outputs) {
   console.log('  -', relative(ROOT, outFile), `(${(statSync(outFile).size / 1024).toFixed(1)} KB)`);
 }
 for (const file of files) console.log('    ·', relative(ROOT, file));
+
+/* 自检：包根目录的 manifest.json */
+const verified = verifyPackage(outputs[0]);
+console.log(
+  `  自检通过：包根目录 manifest.json 可解析，id=${verified.id}，version=${verified.version}`
+);
