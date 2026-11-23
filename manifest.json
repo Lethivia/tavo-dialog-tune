@@ -1,0 +1,153 @@
+{
+  "specVersion": 2,
+  "id": "io.github.dialogtune.dialog-tune",
+  "name": { "$t": "plugin.name" },
+  "version": "1.0.0",
+  "entry": "entry.js",
+  "author": "Dialog Tune",
+  "description": { "$t": "plugin.description" },
+  "releaseNotes": { "$t": "releaseNotes.1_0_0" },
+  "localization": {
+    "defaultLocale": "zh-CN",
+    "resources": {
+      "en": "locales/en.json",
+      "zh-CN": "locales/zh-CN.json"
+    }
+  },
+  "cover": "icons/cover.png",
+  "minAppVersion": "1.0.0",
+  "permissions": ["generate", "message", "input", "variable"],
+  "contributes": {
+    "visible": {
+      "inputActions": true,
+      "lastMessageActions": true,
+      "chat": true,
+      "messages": true
+    },
+    "inputActions": [
+      {
+        "id": "dialog-tune",
+        "label": { "$t": "actions.dialogTune" },
+        "icon": "icons/tune.png"
+      }
+    ],
+    "lastMessageActions": [
+      {
+        "id": "dialog-tune-last",
+        "label": { "$t": "actions.dialogTune" },
+        "icon": "icons/tune.png",
+        "role": "any"
+      }
+    ],
+    "htmlFragments": [
+      {
+        "id": "dialog-tune-panel",
+        "src": "ui/panel.html",
+        "mount": "/chat/body/end"
+      },
+      {
+        "id": "dialog-tune-message-user",
+        "src": "ui/message.html",
+        "mount": "/messages/end?role=user"
+      },
+      {
+        "id": "dialog-tune-message-character",
+        "src": "ui/message.html",
+        "mount": "/messages/end?role=character"
+      }
+    ],
+    "settings": {
+      "schema": [
+        {
+          "type": "info",
+          "text": { "$t": "settings.info" },
+          "icon": "info"
+        },
+        {
+          "key": "enabled",
+          "type": "switch",
+          "label": { "$t": "settings.enabled" },
+          "default": true
+        },
+        { "type": "header", "label": { "$t": "settings.header.trigger" } },
+        {
+          "key": "showInlineButton",
+          "type": "switch",
+          "label": { "$t": "settings.showInlineButton" },
+          "default": true,
+          "description": { "$t": "settings.showInlineButton.desc" }
+        },
+        {
+          "key": "longPressBehavior",
+          "type": "select",
+          "label": { "$t": "settings.longPress.label" },
+          "default": "pill",
+          "options": [
+            { "value": "pill", "label": { "$t": "settings.longPress.pill" } },
+            { "value": "panel", "label": { "$t": "settings.longPress.panel" } },
+            { "value": "off", "label": { "$t": "settings.longPress.off" } }
+          ],
+          "description": { "$t": "settings.longPress.desc" }
+        },
+        { "type": "header", "label": { "$t": "settings.header.context" } },
+        {
+          "key": "defaultUseMemory",
+          "type": "switch",
+          "label": { "$t": "settings.defaultUseMemory" },
+          "default": false,
+          "description": { "$t": "settings.defaultUseMemory.desc" }
+        },
+        {
+          "key": "defaultRecentN",
+          "type": "text",
+          "label": { "$t": "settings.defaultRecentN" },
+          "default": "0",
+          "description": { "$t": "settings.defaultRecentN.desc" }
+        },
+        {
+          "key": "maxRecentN",
+          "type": "text",
+          "label": { "$t": "settings.maxRecentN" },
+          "default": "50",
+          "description": { "$t": "settings.maxRecentN.desc" }
+        },
+        { "type": "header", "label": { "$t": "settings.header.behavior" } },
+        {
+          "key": "guidePrompt",
+          "type": "textarea",
+          "label": { "$t": "settings.guidePrompt" },
+          "default": { "$t": "settings.guidePrompt.default" },
+          "minLines": 4,
+          "maxLines": 12,
+          "placeholder": { "$t": "settings.guidePrompt.placeholder" },
+          "description": { "$t": "settings.guidePrompt.desc" }
+        },
+        {
+          "key": "timeoutSeconds",
+          "type": "text",
+          "label": { "$t": "settings.timeoutSeconds" },
+          "default": "60",
+          "description": { "$t": "settings.timeoutSeconds.desc" }
+        },
+        {
+          "key": "autoApply",
+          "type": "switch",
+          "label": { "$t": "settings.autoApply" },
+          "default": false,
+          "description": { "$t": "settings.autoApply.desc" }
+        },
+        {
+          "key": "contentLanguage",
+          "type": "select",
+          "label": { "$t": "settings.contentLanguage" },
+          "default": "source",
+          "options": [
+            { "value": "source", "label": { "$t": "settings.contentLanguage.source" } },
+            { "value": "app", "label": { "$t": "settings.contentLanguage.app" } }
+          ],
+          "description": { "$t": "settings.contentLanguage.desc" }
+        }
+      ]
+    }
+  }
+}
