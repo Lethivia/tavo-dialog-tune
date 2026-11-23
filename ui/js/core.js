@@ -398,25 +398,31 @@
   var REFINE_LIMIT = 2000;
   /** 逐字细化的总预算：超出后改为按单位整体标记，避免生成过多 DOM 节点 */
   var SEGMENT_BUDGET = 600;
+  /** 只有相似度达到这个值，才认为「删掉的这段」和「新增的这段」是同一处的改写 */
+  var PAIR_THRESHOLD = 0.5;
+  /** 未配对单位的输出上限：超过就合并成整块 */
+  var TAIL_LIMIT = 400;
 
-  /** 保留换行的按行切分 */
+  /** 保留换行的按行切分；结尾的空行不算一个单位 */
   function splitLines(text) {
     var parts = String(text || '').split('\n');
     var lines = [];
     for (var i = 0; i < parts.length; i++) {
-      lines.push(i < parts.length - 1 ? parts[i] + '\n' : parts[i]);
+      if (i < parts.length - 1) lines.push(parts[i] + '\n');
+      else if (parts[i] !== '') lines.push(parts[i]);
     }
     return lines;
   }
 
   /**
-   * 切分「对齐单位」：多行文本按行，单行文本按标点/词切分。
-   * 这样即使整条消息只有一行，也能按句对齐，而不是整段一起替换。
+   * 切分「对齐单位」。
+   * byLines 决定粒度；调用方必须保证两段文本用同一种粒度，
+   * 否则单位不可比，会把整段误判成全部替换。
    */
-  function splitUnits(text) {
+  function splitUnits(text, byLines) {
     var str = String(text || '');
     if (!str) return [];
-    if (str.indexOf('\n') >= 0) return splitLines(str);
+    if (byLines) return splitLines(str);
     var units = str.match(/[^，。！？；：、,.!?;:\s]+[，。！？；：、,.!?;:\s]*/g);
     if (units && units.length >= 8) return units;
     /* 没有标点的长文本：按固定长度切块，至少能定位到块级别 */
@@ -428,6 +434,19 @@
       return chunks;
     }
     return units && units.length ? units : [str];
+  }
+
+  /**
+   * 两个单位的相似度：公共前缀 + 公共后缀占较长者的比例。
+   * 用来判断「删掉的这段」和「新增的这段」是不是同一处的改写。
+   */
+  function unitSimilarity(a, b) {
+    var minLen = Math.min(a.length, b.length);
+    var pre = 0;
+    while (pre < minLen && a.charAt(pre) === b.charAt(pre)) pre++;
+    var suf = 0;
+    while (suf < minLen - pre && a.charAt(a.length - 1 - suf) === b.charAt(b.length - 1 - suf)) suf++;
+    return (pre + suf) / Math.max(a.length, b.length, 1);
   }
 
   /**
@@ -463,8 +482,18 @@
     var tText = String(tuned || '');
     if (oText === tText) return [];
 
-    var oUnits = splitUnits(oText);
-    var tUnits = splitUnits(tText);
+    /* 两段文本必须用同一种切分粒度，否则单位不可比 */
+    var byLines = oText.indexOf('\n') >= 0 || tText.indexOf('\n') >= 0;
+    var oSource = oText;
+    var tSource = tText;
+    if (byLines) {
+      /* 统一补上结尾换行，保证「最后一行」的结构也一致 */
+      if (oSource.charAt(oSource.length - 1) !== '\n') oSource += '\n';
+      if (tSource.charAt(tSource.length - 1) !== '\n') tSource += '\n';
+    }
+
+    var oUnits = splitUnits(oSource, byLines);
+    var tUnits = splitUnits(tSource, byLines);
 
     /* 规模太大时不做对齐，直接整块标记（改动本来就很大） */
     if (oUnits.length * tUnits.length > UNIT_DIFF_LIMIT) {
@@ -491,34 +520,73 @@
         else adds.push(ops[i].text);
         i++;
       }
-      var pairs = Math.min(dels.length, adds.length);
-      /* 预算用尽后剩下的单位合并成整块，避免节点数失控 */
-      var tailDel = '';
-      var tailAdd = '';
-      for (var k = 0; k < pairs; k++) {
-        if (budget.remaining <= 0) {
-          tailDel += dels[k];
-          tailAdd += adds[k];
-          continue;
+      /* 只有「一对一」且确实相似时才逐字细化。
+         数量不等（例如插入一段 + 改写一段）说明多出来的是独立新增，
+         硬凑成一对会把不相干的两段配在一起，产生误导。 */
+      var oneToOne = dels.length === adds.length && dels.length > 0;
+      /* 未配对的部分按单位逐个保留：这样「哪一段被改」的信息不会丢 */
+      var tailDel = [];
+      var tailAdd = [];
+
+      if (oneToOne) {
+        for (var k = 0; k < dels.length; k++) {
+          if (budget.remaining <= 0) {
+            tailDel.push(dels[k]);
+            tailAdd.push(adds[k]);
+            continue;
+          }
+          if (unitSimilarity(dels[k], adds[k]) >= PAIR_THRESHOLD) {
+            pushRefinedPair(segments, dels[k], adds[k], budget);
+          } else {
+            /* 不是同一处的改写：整段标出，不做逐字对齐 */
+            tailDel.push(dels[k]);
+            tailAdd.push(adds[k]);
+          }
         }
-        pushRefinedPair(segments, dels[k], adds[k], budget);
+      } else {
+        for (var d = 0; d < dels.length; d++) tailDel.push(dels[d]);
+        for (var a = 0; a < adds.length; a++) tailAdd.push(adds[a]);
       }
-      for (var k2 = pairs; k2 < dels.length; k2++) tailDel += dels[k2];
-      for (var k3 = pairs; k3 < adds.length; k3++) tailAdd += adds[k3];
-      if (tailDel) segments.push({ type: 'del', text: tailDel });
-      if (tailAdd) segments.push({ type: 'add', text: tailAdd });
+
+      /* 单位太多时合并成整块，避免 DOM 节点失控 */
+      if (tailDel.length + tailAdd.length > TAIL_LIMIT) {
+        if (tailDel.length) segments.push({ type: 'del', text: tailDel.join('') });
+        if (tailAdd.length) segments.push({ type: 'add', text: tailAdd.join('') });
+      } else {
+        for (var d2 = 0; d2 < tailDel.length; d2++) {
+          segments.push({ type: 'del', text: tailDel[d2] });
+        }
+        for (var a2 = 0; a2 < tailAdd.length; a2++) {
+          segments.push({ type: 'add', text: tailAdd[a2] });
+        }
+      }
     }
     /* 合并相邻同类段：视觉上一样，但 DOM 节点少一个数量级 */
-    return mergeSegments(segments);
+    var merged = mergeSegments(segments);
+    /* 去掉为了对齐补上的那个结尾换行 */
+    if (byLines && merged.length) {
+      var last = merged[merged.length - 1];
+      if (last.text.charAt(last.text.length - 1) === '\n') {
+        last.text = last.text.slice(0, -1);
+        if (!last.text) merged.pop();
+      }
+    }
+    return merged;
   }
 
-  /** 合并相邻同类段 */
+  /**
+   * 只合并相邻的「公共」段（纯文本，节点开销低）；
+   * 新增/删除段按单位保留，避免把「这一段被改写」显示成「整块被替换」。
+   */
   function mergeSegments(segments) {
     var merged = [];
     for (var i = 0; i < segments.length; i++) {
       var last = merged[merged.length - 1];
-      if (last && last.type === segments[i].type) last.text += segments[i].text;
-      else merged.push({ type: segments[i].type, text: segments[i].text });
+      if (last && last.type === 'equal' && segments[i].type === 'equal') {
+        last.text += segments[i].text;
+      } else {
+        merged.push({ type: segments[i].type, text: segments[i].text });
+      }
     }
     return merged;
   }

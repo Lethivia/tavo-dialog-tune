@@ -476,5 +476,62 @@ console.log('\n18. 差异算法的精确行为');
   );
 }
 
+/* 19. 段落级增删改的差异表现（用户提出的场景） */
+console.log('\n19. 段落级增删改');
+{
+  const diff = api.diff;
+  const flat = (segs) => segs.map((s) => s.type + ':' + JSON.stringify(s.text)).join(' | ');
+
+  /* 纯插入一段：其它地方必须保持为公共部分 */
+  assert(
+    flat(diff('甲段。\n乙段。\n丙段。', '甲段。\n乙段。\n新增段。\n丙段。')) ===
+      'equal:"甲段。\\n乙段。\\n" | add:"新增段。\\n" | equal:"丙段。"',
+    '中间插入一段：只有新增段被标出，其余保持公共',
+    flat(diff('甲段。\n乙段。\n丙段。', '甲段。\n乙段。\n新增段。\n丙段。'))
+  );
+  assert(
+    flat(diff('甲段。\n乙段。\n丙段。', '甲段。\n丙段。')) ===
+      'equal:"甲段。\\n" | del:"乙段。\\n" | equal:"丙段。"',
+    '中间删除一段：只有被删的那段被标出',
+    flat(diff('甲段。\n乙段。\n丙段。', '甲段。\n丙段。'))
+  );
+  assert(
+    flat(diff('甲段。\n乙段。', '甲段。\n乙段。\n新增段。')) ===
+      'equal:"甲段。\\n乙段。\\n" | add:"新增段。"',
+    '结尾插入一段：只有新增段被标出',
+    flat(diff('甲段。\n乙段。', '甲段。\n乙段。\n新增段。'))
+  );
+
+  /* 插入 + 改写混在一起：不能把不相干的两段配成一对 */
+  const mixed = diff('甲段。\n乙段。\n丙段。', '甲段。\n新增段。\n乙段改。\n丙段。');
+  const mixedFlat = flat(mixed);
+  assert(
+    !mixedFlat.includes('del:"乙" | add:"新增"'),
+    '插入一段 + 改一段时，不会把两段错误配成一对',
+    mixedFlat
+  );
+  assert(
+    mixedFlat === 'equal:"甲段。\\n" | del:"乙段。\\n" | add:"新增段。\\n" | add:"乙段改。\\n" | equal:"丙段。"',
+    '插入与改写分别标出（新增的两段各自独立），如实反映改动',
+    mixedFlat
+  );
+
+  /* 原文无换行、结果有换行：粒度必须统一，否则整段会被误判 */
+  const mixed2 = flat(diff('正文内容。', '开头的铺垫。\n正文内容。\n结尾的收束。'));
+  assert(
+    mixed2 === 'add:"开头的铺垫。\\n" | equal:"正文内容。\\n" | add:"结尾的收束。"',
+    '原文没有换行、结果有换行时，正文仍被正确识别为公共部分',
+    mixed2
+  );
+
+  /* 整段改写：仍要逐字对齐（只在确实相似时） */
+  const rewritten = flat(diff('今天天气不错。\n明天见。', '今天天气很好。\n明天见。'));
+  assert(
+    rewritten === 'equal:"今天天气" | del:"不错" | add:"很好" | equal:"。\\n明天见。"',
+    '段落内容改写：逐字对齐，公共部分保留',
+    rewritten
+  );
+}
+
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);
