@@ -424,5 +424,57 @@ console.log('\n17. 差异算法与样式');
   assert(css.includes('.dt-diff__del'), '样式表里有删除高亮规则');
 }
 
+/* 18. 差异算法的精确行为：用手算期望值锁死 */
+console.log('\n18. 差异算法的精确行为');
+{
+  const diff = api.diff;
+  const show = (before, after) =>
+    diff(before, after).map((s) => s.type + ':' + JSON.stringify(s.text)).join(' | ');
+
+  assert(
+    show('今天天气不错', '今天天气很好') ===
+      'equal:"今天天气" | del:"不错" | add:"很好"',
+    '中文：按字对齐，公共部分保留、替换部分整体标出',
+    show('今天天气不错', '今天天气很好')
+  );
+  assert(
+    show('Hello world', 'Hello there') === 'equal:"Hello " | del:"world" | add:"there"',
+    '英文：按词对齐（不切开单词内部）',
+    show('Hello world', 'Hello there')
+  );
+  const expectedMultiline = [
+    { type: 'equal', text: '第一行\n' },
+    { type: 'equal', text: '第二行' },
+    { type: 'add', text: '改' }
+  ];
+  assert(
+    JSON.stringify(diff('第一行\n第二行', '第一行\n第二行改')) ===
+      JSON.stringify(expectedMultiline),
+    '多行：逐行对齐后再逐字细化',
+    show('第一行\n第二行', '第一行\n第二行改')
+  );
+  assert(diff('完全一样', '完全一样').length === 0, '完全相同没有差异');
+  assert(
+    diff('', '新增内容').length === 1 && diff('', '新增内容')[0].type === 'add',
+    '空原文时全部算新增'
+  );
+  assert(
+    diff('原有内容', '').length === 1 && diff('原有内容', '')[0].type === 'del',
+    '空结果时全部算删除'
+  );
+
+  /* 最小编辑性质：替换一段时，add/del 各只有一段 */
+  const segments = diff('这是一段完整的话', '这是一段改过的话');
+  const adds = segments.filter((s) => s.type === 'add');
+  const dels = segments.filter((s) => s.type === 'del');
+  assert(adds.length === 1 && dels.length === 1, '改动一处只产生一对 add/del');
+  assert(
+    segments.filter((s) => s.type === 'equal').map((s) => s.text).join('') ===
+      '这是一段的话',
+    '公共部分被完整保留（前后两段都算公共）',
+    JSON.stringify(segments)
+  );
+}
+
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);

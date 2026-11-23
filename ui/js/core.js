@@ -1508,6 +1508,8 @@
     close: closeSheet,
     requestOpen: requestOpen,
     applyStrings: applyStrings,
+    /* 差异算法对外暴露，便于独立验证与排查 */
+    diff: buildDiff,
     claimHost: claimHost,
     handleRequest: handleRequest,
     isHost: function () {
