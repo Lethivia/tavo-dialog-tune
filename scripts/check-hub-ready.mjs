@@ -20,7 +20,15 @@ import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PKG = resolve(process.argv[2] || resolve(ROOT, 'dist/dialog-tune-1.0.9.tpg'));
+function latestPackage() {
+  const dir = resolve(ROOT, 'dist');
+  if (!existsSync(dir)) return resolve(ROOT, 'dist/plugin.tpg');
+  const candidates = readdirSync(dir)
+    .filter((name) => name.endsWith('.tpg'))
+    .sort();
+  return resolve(dir, candidates[candidates.length - 1] || 'plugin.tpg');
+}
+const PKG = resolve(process.argv[2] || latestPackage());
 /** Hub 账号名：manifest 的 author 必须与它一致 */
 const ACCOUNT_NAME = process.env.HUB_ACCOUNT || 'Lethivia';
 
@@ -156,7 +164,16 @@ for (const fragment of manifest.contributes?.htmlFragments || []) {
 }
 ok('manifestFileInvalid：HTML 片段路径均存在');
 
-/* 设置项 */
+/* 设置项：类型必须在服务端实证接受集合内 */
+const HUB_SETTINGS_TYPES = new Set(['info', 'switch', 'select', 'divider', 'text', 'textarea']);
+for (const item of manifest.contributes?.settings?.schema || []) {
+  if (!HUB_SETTINGS_TYPES.has(item.type)) {
+    bad(
+      `manifestSettingsInvalid：设置项类型「${item.type}」不在服务端接受范围内` +
+        `（已上架插件只用过 ${[...HUB_SETTINGS_TYPES].join(' / ')}）`
+    );
+  }
+}
 for (const item of manifest.contributes?.settings?.schema || []) {
   if (!item.type) bad('manifestSettingsInvalid：存在缺少 type 的设置项');
   if (['switch', 'select', 'slider', 'text', 'textarea', 'list'].includes(item.type)) {
@@ -226,6 +243,13 @@ if (!loc || !loc.defaultLocale) {
     );
     ok(`i18nMismatchWarning：多语言支持完整（${Object.keys(catalogs).join(', ')}）`);
   }
+}
+
+/* 封面必须在包根目录且正好叫 cover.png —— 网页端的封面预览 worker 按文件名精确匹配 */
+if (manifest.cover && manifest.cover !== 'cover.png') {
+  bad(`封面必须位于包根目录且文件名正好是 cover.png（当前 ${manifest.cover}）`);
+} else if (manifest.cover) {
+  ok('封面路径合规：cover.png 位于包根目录');
 }
 
 /* 封面与图标 */

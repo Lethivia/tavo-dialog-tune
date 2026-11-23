@@ -16,8 +16,6 @@
   var api = window.__dialogTune__;
   if (!api) return;
 
-  var REQUEST_KEY = 'dialog_tune_request';
-
   /* 认领宿主：面板只在这里创建 */
   api.claimHost();
 
@@ -96,20 +94,6 @@
   } catch (e) {
     /* 忽略 */
   }
-
-  /* ---- 聊天作用域信箱兜底 ---- */
-  setInterval(function () {
-    tavo.variable
-      .get(REQUEST_KEY, 'chat')
-      .then(function (value) {
-        if (!value || !value.id) return;
-        api.handleRequest(value);
-        /* 信箱通道没有回执，这里清掉信箱就等于告诉请求方「已接手」，
-           避免请求方 350ms 后又就地展开一个面板，出现两个面板。 */
-        return tavo.variable.unset(REQUEST_KEY, 'chat').catch(function () {});
-      })
-      .catch(function () {});
-  }, 300);
 
   /* ---- 聊天切换 ---- */
   tavo.plugin.on('chat:closed', function () {

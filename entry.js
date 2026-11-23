@@ -74,13 +74,19 @@
     open({ kind: 'input' });
   });
 
-  /* 最后一条消息 action bar */
-  tavo.plugin.onLastMessageAction('dialog-tune-last', async function (context) {
-    if (!context || !context.messageId) return;
-    open({
-      kind: 'message',
-      messageId: context.messageId,
-      role: context.role
-    });
+  /* 侧边栏动作：对最后一条消息做微调
+     （插件中心已上架的插件普遍用 sidebar 入口，这里与之一致） */
+  tavo.plugin.onSidebarAction('dialog-tune', async function () {
+    try {
+      const last = await tavo.message.find(-1);
+      const message = last && last[0];
+      if (!message) {
+        open({ kind: 'input' });
+        return;
+      }
+      open({ kind: 'message', messageId: message.id, role: message.role });
+    } catch (error) {
+      open({ kind: 'input' });
+    }
   });
 })();

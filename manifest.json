@@ -1,35 +1,40 @@
 {
   "specVersion": 2,
   "id": "io.github.dialogtune.dialog-tune",
-  "name": { "$t": "plugin.name" },
-  "version": "1.0.9",
+  "name": {
+    "$t": "plugin.name"
+  },
+  "version": "1.0.10",
   "entry": "entry.js",
   "author": "Lethivia",
-  "description": { "$t": "plugin.description" },
-  "releaseNotes": { "$t": "releaseNotes.1_0_9" },
+  "description": {
+    "$t": "plugin.description"
+  },
+  "releaseNotes": {
+    "$t": "releaseNotes.1_0_10"
+  },
   "localization": {
-    "defaultLocale": "zh-CN",
+    "defaultLocale": "en",
     "resources": {
       "en": "locales/en.json",
       "zh-CN": "locales/zh-CN.json"
     }
   },
   "cover": "cover.png",
-  "minAppVersion": "0.93.0",
-  "permissions": ["generate", "message", "input", "variable"],
+  "permissions": [
+    "generate",
+    "input",
+    "memory",
+    "message",
+    "variable"
+  ],
   "contributes": {
     "inputActions": [
       {
         "id": "dialog-tune",
-        "label": { "$t": "actions.dialogTune" }
-      }
-    ],
-    "lastMessageActions": [
-      {
-        "id": "dialog-tune-last",
-        "label": { "$t": "actions.dialogTune" },
-        "icon": "icons/tune.png",
-        "role": "any"
+        "label": {
+          "$t": "actions.dialogTune"
+        }
       }
     ],
     "htmlFragments": [
@@ -48,75 +53,148 @@
       "schema": [
         {
           "type": "info",
-          "text": { "$t": "settings.info" },
+          "text": {
+            "$t": "settings.info"
+          },
           "icon": "info"
         },
         {
           "key": "enabled",
           "type": "switch",
-          "label": { "$t": "settings.enabled" },
+          "label": {
+            "$t": "settings.enabled"
+          },
           "default": true
         },
-        { "type": "header", "label": { "$t": "settings.header.trigger" } },
+        {
+          "type": "info",
+          "text": {
+            "$t": "settings.section.trigger"
+          },
+          "icon": "info"
+        },
         {
           "key": "showInlineButton",
           "type": "switch",
-          "label": { "$t": "settings.showInlineButton" },
+          "label": {
+            "$t": "settings.showInlineButton"
+          },
           "default": true,
-          "description": { "$t": "settings.showInlineButton.desc" }
+          "description": {
+            "$t": "settings.showInlineButton.desc"
+          }
         },
-        { "type": "header", "label": { "$t": "settings.header.context" } },
+        {
+          "type": "info",
+          "text": {
+            "$t": "settings.section.context"
+          },
+          "icon": "info"
+        },
         {
           "key": "defaultUseMemory",
           "type": "switch",
-          "label": { "$t": "settings.defaultUseMemory" },
+          "label": {
+            "$t": "settings.defaultUseMemory"
+          },
           "default": false,
-          "description": { "$t": "settings.defaultUseMemory.desc" }
+          "description": {
+            "$t": "settings.defaultUseMemory.desc"
+          }
         },
         {
           "key": "defaultRecentN",
           "type": "text",
-          "label": { "$t": "settings.defaultRecentN" },
+          "label": {
+            "$t": "settings.defaultRecentN"
+          },
           "default": "0",
-          "description": { "$t": "settings.defaultRecentN.desc" }
+          "description": {
+            "$t": "settings.defaultRecentN.desc"
+          }
         },
         {
           "key": "maxRecentN",
           "type": "text",
-          "label": { "$t": "settings.maxRecentN" },
+          "label": {
+            "$t": "settings.maxRecentN"
+          },
           "default": "50",
-          "description": { "$t": "settings.maxRecentN.desc" }
+          "description": {
+            "$t": "settings.maxRecentN.desc"
+          }
         },
-        { "type": "header", "label": { "$t": "settings.header.behavior" } },
+        {
+          "type": "info",
+          "text": {
+            "$t": "settings.section.behavior"
+          },
+          "icon": "info"
+        },
         {
           "key": "guidePrompt",
           "type": "textarea",
-          "label": { "$t": "settings.guidePrompt" },
-          "default": { "$t": "settings.guidePrompt.default" },
+          "label": {
+            "$t": "settings.guidePrompt"
+          },
+          "default": {
+            "$t": "settings.guidePrompt.default"
+          },
           "minLines": 4,
           "maxLines": 12,
-          "placeholder": { "$t": "settings.guidePrompt.placeholder" },
-          "description": { "$t": "settings.guidePrompt.desc" }
+          "placeholder": {
+            "$t": "settings.guidePrompt.placeholder"
+          },
+          "description": {
+            "$t": "settings.guidePrompt.desc"
+          }
         },
         {
           "key": "autoApply",
           "type": "switch",
-          "label": { "$t": "settings.autoApply" },
+          "label": {
+            "$t": "settings.autoApply"
+          },
           "default": false,
-          "description": { "$t": "settings.autoApply.desc" }
+          "description": {
+            "$t": "settings.autoApply.desc"
+          }
         },
         {
           "key": "contentLanguage",
           "type": "select",
-          "label": { "$t": "settings.contentLanguage" },
+          "label": {
+            "$t": "settings.contentLanguage"
+          },
           "default": "source",
           "options": [
-            { "value": "source", "label": { "$t": "settings.contentLanguage.source" } },
-            { "value": "app", "label": { "$t": "settings.contentLanguage.app" } }
+            {
+              "value": "source",
+              "label": {
+                "$t": "settings.contentLanguage.source"
+              }
+            },
+            {
+              "value": "app",
+              "label": {
+                "$t": "settings.contentLanguage.app"
+              }
+            }
           ],
-          "description": { "$t": "settings.contentLanguage.desc" }
+          "description": {
+            "$t": "settings.contentLanguage.desc"
+          }
         }
       ]
-    }
-  }
+    },
+    "sidebar": [
+      {
+        "id": "dialog-tune",
+        "label": {
+          "$t": "actions.dialogTune"
+        }
+      }
+    ]
+  },
+  "minAppVersion": "0.93.0"
 }

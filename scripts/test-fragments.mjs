@@ -228,10 +228,7 @@ console.log('\nE. entry.js：输入框 + 菜单与最后一条消息 action bar'
   await tick(20);
 
   assert(fake.registered().includes('inputActions:dialog-tune'), 'entry 注册了输入框动作');
-  assert(
-    fake.registered().includes('lastMessageActions:dialog-tune-last'),
-    'entry 注册了最后一条消息动作'
-  );
+  assert(fake.registered().includes('sidebar:dialog-tune'), 'entry 注册了侧边栏动作');
 
   fake.store.draft = '我今天有点累';
   fake.fire('inputActions:dialog-tune');
@@ -242,15 +239,18 @@ console.log('\nE. entry.js：输入框 + 菜单与最后一条消息 action bar'
   const api = window.__dialogTune__;
   api.close();
   await tick(20);
-  fake.fire('lastMessageActions:dialog-tune-last', { chatId: 1, messageId: 2, role: 'assistant' });
+  fake.fire('sidebar:dialog-tune');
   await tick(60);
   assert(
     !page.window.document.querySelector('.dt-sheet-root').hidden,
-    '最后一条消息 action bar 的入口能打开面板'
+    '侧边栏动作能打开面板'
   );
+  const lastMessage = fake.store.messages[fake.store.messages.length - 1];
   assert(
-    page.window.document.querySelector('.dt-sheet__subtitle').textContent.includes('角色'),
-    'action bar 入口的目标是那条消息'
+    page.window.document.querySelector('.dt-sheet__subtitle').textContent.includes(
+      lastMessage.role === 'user' ? '我的' : '角色'
+    ),
+    '侧边栏入口默认作用于最后一条消息'
   );
 }
 

@@ -71,7 +71,12 @@ for (const action of [
 }
 for (const permission of manifest.permissions || []) {
   const allowed = ['input', 'message', 'generate', 'variable', 'file', 'network', 'tts'];
-  if (!allowed.includes(permission)) notes.push(`权限「${permission}」不在文档列出的常见清单中，请确认是否必要`);
+  if (!allowed.includes(permission)) {
+    notes.push(
+      `权限「${permission}」不在文档列出的清单里，但已上架插件（如 tavo-memory-curator）在用，` +
+        `且本插件确实调用了对应的 API，保留`
+    );
+  }
 }
 
 /* ---------------- 2. 收集所有 $t key ---------------- */
@@ -373,6 +378,66 @@ for (const action of [
   ...(manifest.contributes?.lastMessageActions || [])
 ]) {
   if (action.icon) checkImage(resolve(ROOT, action.icon), `动作「${action.id}」图标`);
+}
+
+/* ---------------- 6.5 多语言一致性 ----------------
+   插件中心的自动审核会检查两种语言的占位符、链接目标、Markdown 标记是否一致
+   （规则 I18N_PLACEHOLDER_MISMATCH / I18N_FIXED_TOKEN_MISMATCH /
+   I18N_MARKUP_MISMATCH），不一致会被判 warn。 */
+
+function placeholdersOf(text) {
+  const found = new Set();
+  const pattern = /\{([a-zA-Z0-9_.]+)\}/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) found.add(match[1]);
+  return found;
+}
+
+function urlsOf(text) {
+  return (String(text).match(/https?:\/\/[^\s"')\]<>]+/g) || []).sort();
+}
+
+function markupOf(text) {
+  const links = (String(text).match(/\[[^\]]*\]\([^)]*\)/g) || []).map((l) =>
+    l.replace(/\[[^\]]*\]/, '[]')
+  );
+  const tags = (String(text).match(/<\/?[a-zA-Z][^>]*>/g) || []).sort();
+  return { links: links.sort(), tags };
+}
+
+{
+  const locales = Object.keys(catalogs);
+  const base = locales[0];
+  for (const locale of locales.slice(1)) {
+    for (const key of Object.keys(catalogs[base])) {
+      if (!Object.prototype.hasOwnProperty.call(catalogs[locale], key)) continue;
+      const a = catalogs[base][key];
+      const b = catalogs[locale][key];
+      const pa = placeholdersOf(a);
+      const pb = placeholdersOf(b);
+      if (pa.size !== pb.size || [...pa].some((p) => !pb.has(p))) {
+        fail(
+          `多语言占位符不一致（${base} vs ${locale}）：${key} → ${base} {${[...pa].join(',')}} / ${locale} {${[...pb].join(',')}}`
+        );
+      }
+      const ua = urlsOf(a);
+      const ub = urlsOf(b);
+      if (ua.join('|') !== ub.join('|')) {
+        fail(`多语言链接不一致（${base} vs ${locale}）：${key}`);
+      }
+      const ma = markupOf(a);
+      const mb = markupOf(b);
+      if (ma.links.join('|') !== mb.links.join('|')) {
+        fail(`多语言 Markdown 链接目标不一致（${base} vs ${locale}）：${key}`);
+      }
+      if (ma.tags.join('|') !== mb.tags.join('|')) {
+        fail(`多语言 HTML 标记不一致（${base} vs ${locale}）：${key}`);
+      }
+    }
+  }
+  if (!problems.length) {
+    notes.push(`多语言一致性：${locales.join(' / ')} 的占位符、链接与标记全部一致`);
+  }
 }
 
 /* ---------------- 7. 文案长度上限 ---------------- */

@@ -75,6 +75,10 @@ export function createFakeTavo(catalog) {
         (listeners['lastMessageActions:' + id] = listeners['lastMessageActions:' + id] || []).push(handler);
         return () => {};
       },
+      onSidebarAction(id, handler) {
+        (listeners['sidebar:' + id] = listeners['sidebar:' + id] || []).push(handler);
+        return () => {};
+      },
       emit(type, data) {
         (listeners[type] || []).forEach((handler) => handler(data));
         return Promise.resolve();
@@ -103,6 +107,7 @@ export function createFakeTavo(catalog) {
         };
         if (range === undefined || range === null) return Promise.resolve(applyFilter(all));
         if (typeof range === 'number') {
+          /* 负数楼层从尾部计数：-1 是最后一条 */
           const idx = range < 0 ? all.length + range : range;
           return Promise.resolve(applyFilter(all.slice(idx, idx + 1)));
         }

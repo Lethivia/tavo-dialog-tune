@@ -4,17 +4,14 @@
   "actions.dialogTune": "对话微调",
   "settings.info": "「对话微调」的默认设置。引导提示词决定模型如何执行微调，可按自己的写作习惯改写。",
   "settings.enabled": "启用插件",
-  "settings.header.trigger": "触发方式",
   "settings.showInlineButton": "显示行内微调按钮",
   "settings.showInlineButton.desc": "在每条消息下方显示一个小小的「微调」按钮，这是消息上最直接的入口。",
-  "settings.header.context": "上下文",
   "settings.defaultUseMemory": "默认使用长记忆",
   "settings.defaultUseMemory.desc": "打开微调面板时默认带上当前聊天的长期记忆。关闭状态会被记住，下次打开保持不变。",
   "settings.defaultRecentN": "默认最近对话条数",
   "settings.defaultRecentN.desc": "打开面板时默认带上的对话条数（取被微调消息之前的对话）。你的调整会被记住。",
   "settings.maxRecentN": "最近对话条数上限",
   "settings.maxRecentN.desc": "面板里最多能填的条数。",
-  "settings.header.behavior": "生成行为",
   "settings.guidePrompt": "微调引导提示词",
   "settings.guidePrompt.default": "你是一个文本微调助手。请按照玩家给出的「微调要求」改写下面的原文，并遵守：\n1. 只改动与要求直接相关的部分，其余内容逐字保留，包括标点、换行、格式、称呼、专有名词与情绪强度。\n2. 不增删信息，不总结，不续写，不评价原文。\n3. 保留原文的人称、时态与语气；除非要求里明确说明，否则不要把叙述改成对话。\n4. 输出完整的改写后正文，不要输出改动说明、前言、总结或 Markdown 代码块。",
   "settings.guidePrompt.placeholder": "留空则使用默认引导提示词。",
@@ -81,5 +78,8 @@
   "error.targetChanged": "切换了目标，本次生成结果已丢弃",
   "runtime.diff.stats": "新增 {added} 字 · 删除 {removed} 字",
   "runtime.diff.same": "与原文完全一致",
-  "releaseNotes.1_0_9": "## 本次更新\n\n- 界面主题由紫色改为淡绿色：主按钮、行内「微调」按钮、开关与选中态统一为淡绿\n- 按钮文字改为深绿并加描边，在深色或浅色聊天背景上都能看清\n- 按钮底色改为实心淡绿，不再半透明，任意聊天主题下都保持可读\n- 对比度由 4.47:1 提升到 7.05:1（面板）与 10.34:1（行内按钮），达到无障碍 AA 标准"
+  "settings.section.trigger": "触发方式",
+  "settings.section.context": "上下文",
+  "settings.section.behavior": "生成行为",
+  "releaseNotes.1_0_10": "## 本次更新\n\n- 修复插件中心拒绝上传：设置项里的分组标题由 header 改为 info（服务端不接受 header）\n- 触发入口改用侧边栏动作（与已上架插件一致），并声明实际用到的 memory 权限\n- 界面默认语言改为 en，回退文案更通用；封面固定为包根目录的 cover.png\n- 移除聊天作用域信箱轮询，避免持续轮询带来的性能与资源占用\n- 插件名、简介与更新说明同步到插件中心表单"
 }

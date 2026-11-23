@@ -4,17 +4,14 @@
   "actions.dialogTune": "Dialog Tune",
   "settings.info": "Defaults for Dialog Tune. The guiding prompt tells the model how to carry out an edit — rewrite it to match your own writing habits.",
   "settings.enabled": "Enable plugin",
-  "settings.header.trigger": "Trigger",
   "settings.showInlineButton": "Show inline Tune button",
   "settings.showInlineButton.desc": "Shows a small Tune button under every message — the most direct way into a message.",
-  "settings.header.context": "Context",
   "settings.defaultUseMemory": "Use long memory by default",
   "settings.defaultUseMemory.desc": "Attach the current chat's long-term memory when the panel opens. Your change is remembered for next time.",
   "settings.defaultRecentN": "Default number of recent messages",
   "settings.defaultRecentN.desc": "How many messages to attach when the panel opens (taken from before the tuned message). Your change is remembered.",
   "settings.maxRecentN": "Maximum recent messages",
   "settings.maxRecentN.desc": "The highest number you can type in the panel.",
-  "settings.header.behavior": "Generation",
   "settings.guidePrompt": "Guiding prompt",
   "settings.guidePrompt.default": "You are a text-editing assistant. Rewrite the passage below according to the player's edit request, and obey:\n1. Change only the parts directly related to the request; keep everything else verbatim, including punctuation, line breaks, formatting, forms of address, proper nouns and emotional intensity.\n2. Do not add or remove information, do not summarise, do not continue the text, do not comment on it.\n3. Keep the original point of view, tense and tone; unless the request says so, do not turn narration into dialogue.\n4. Output the complete rewritten passage, with no explanation, preamble, summary or Markdown code fences.",
   "settings.guidePrompt.placeholder": "Leave empty to use the default guiding prompt.",
@@ -81,5 +78,8 @@
   "error.targetChanged": "The target changed, this result was discarded",
   "runtime.diff.stats": "+{added} / -{removed} chars",
   "runtime.diff.same": "identical to the original",
-  "releaseNotes.1_0_9": "## What's new\n\n- The interface theme changes from purple to light green: primary buttons, the inline Tune button, switches and selected states are all light green now\n- Button text is deep green with a subtle stroke, so it stays legible on both dark and light chat backgrounds\n- Button backgrounds are solid light green instead of translucent, so they remain readable under any chat theme\n- Contrast improves from 4.47:1 to 7.05:1 (panel) and 10.34:1 (inline button), meeting WCAG AA"
+  "settings.section.trigger": "Trigger",
+  "settings.section.context": "Context",
+  "settings.section.behavior": "Generation",
+  "releaseNotes.1_0_10": "## What's new\n\n- Fixed the Plugin Hub rejecting the upload: section titles changed from header to info (the server rejects header)\n- The trigger is now a sidebar action (matching published plugins) and the memory permission we actually use is declared\n- The interface falls back to English, and the cover is always cover.png at the package root\n- Removed the chat-scoped variable polling to avoid continuous polling overhead\n- Plugin name, description and release notes aligned with the Plugin Hub submission form"
 }
