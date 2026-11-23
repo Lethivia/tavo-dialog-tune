@@ -1,0 +1,19 @@
+{
+  "name": "tavo-dialog-tune",
+  "version": "1.0.0",
+  "private": true,
+  "description": "对话微调 — Tavo 插件：长按即可对 AI 回复或自己的输入做定向微调",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/make-icons.mjs",
+    "build": "node scripts/make-icons.mjs && node scripts/build.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node scripts/test-core.mjs",
+    "verify": "npm run check && npm test"
+  },
+  "keywords": ["tavo", "plugin", "tpg", "dialog-tune"],
+  "license": "MIT",
+  "devDependencies": {
+    "jsdom": "^31.0.1"
+  }
+}
