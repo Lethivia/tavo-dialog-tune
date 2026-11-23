@@ -9,9 +9,16 @@
     "build": "node scripts/make-icons.mjs && node scripts/build.mjs",
     "check": "node scripts/check.mjs",
     "test": "node scripts/test-core.mjs",
-    "verify": "npm run check && npm test"
+    "verify": "npm run check && npm test",
+    "build:minimal": "node scripts/build-minimal.mjs",
+    "build:all": "npm run build && npm run build:minimal"
   },
-  "keywords": ["tavo", "plugin", "tpg", "dialog-tune"],
+  "keywords": [
+    "tavo",
+    "plugin",
+    "tpg",
+    "dialog-tune"
+  ],
   "license": "MIT",
   "devDependencies": {
     "jsdom": "^31.0.1"
