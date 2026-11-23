@@ -81,5 +81,5 @@
   "error.targetChanged": "The target changed, this result was discarded",
   "runtime.diff.stats": "+{added} / -{removed} chars",
   "runtime.diff.same": "identical to the original",
-  "releaseNotes.1_0_8": "## What's new\n\n- The panel is now mounted in the host page document: it always sits at the bottom of the screen and is never constrained by the message bubble iframe\n- Cross-fragment communication now uses custom events on the host page window instead of polling a chat-scoped variable (polling exhausts file descriptors on real devices)\n- The diff collapses to a single block when everything changed, and similarity now considers both common edges and character-level LCS\n- Added a text-conservation check: no input can lose or duplicate characters\n- Fixed the preview area going blank when the result was identical to the original"
+  "releaseNotes.1_0_9": "## What's new\n\n- The interface theme changes from purple to light green: primary buttons, the inline Tune button, switches and selected states are all light green now\n- Button text is deep green with a subtle stroke, so it stays legible on both dark and light chat backgrounds\n- Button backgrounds are solid light green instead of translucent, so they remain readable under any chat theme\n- Contrast improves from 4.47:1 to 7.05:1 (panel) and 10.34:1 (inline button), meeting WCAG AA"
 }

@@ -4,9 +4,13 @@
  */
 
 .dt-sheet-root {
-  --dt-accent: #6366f1;
-  --dt-accent-strong: #4f46e5;
-  --dt-accent-soft: rgba(99, 102, 241, 0.12);
+  /* 淡绿主题：淡底 + 深绿字，对比度 7.05:1（AA 达标，旧紫底白字只有 4.47:1） */
+  --dt-accent: #7ad4a9;
+  --dt-accent-strong: #5fc795;
+  --dt-accent-ink: #0d3b2a;
+  --dt-accent-soft: rgba(122, 212, 169, 0.18);
+  --dt-accent-line: rgba(13, 59, 42, 0.16);
+  --dt-focus: #2f8f62;
   --dt-surface: #ffffff;
   --dt-surface-2: #f5f6fa;
   --dt-surface-3: #eceef5;
@@ -59,9 +63,12 @@
 
 @media (prefers-color-scheme: dark) {
   .dt-sheet-root {
-    --dt-accent: #818cf8;
-    --dt-accent-strong: #6366f1;
-    --dt-accent-soft: rgba(129, 140, 248, 0.16);
+    --dt-accent: #7ad4a9;
+    --dt-accent-strong: #93e0bb;
+    --dt-accent-ink: #08281d;
+    --dt-accent-soft: rgba(122, 212, 169, 0.18);
+    --dt-accent-line: rgba(255, 255, 255, 0.24);
+    --dt-focus: #8adeb2;
     --dt-surface: #191c24;
     --dt-surface-2: #21242e;
     --dt-surface-3: #2a2e3a;
@@ -81,9 +88,12 @@
 
 html.dark .dt-sheet-root,
 html[data-theme="dark"] .dt-sheet-root {
-  --dt-accent: #818cf8;
-  --dt-accent-strong: #6366f1;
-  --dt-accent-soft: rgba(129, 140, 248, 0.16);
+  --dt-accent: #7ad4a9;
+  --dt-accent-strong: #93e0bb;
+  --dt-accent-ink: #08281d;
+  --dt-accent-soft: rgba(122, 212, 169, 0.18);
+  --dt-accent-line: rgba(255, 255, 255, 0.24);
+  --dt-focus: #8adeb2;
   --dt-surface: #191c24;
   --dt-surface-2: #21242e;
   --dt-surface-3: #2a2e3a;
@@ -466,8 +476,8 @@ html[data-theme="dark"] .dt-sheet-root {
 
 .dt-chip.is-active {
   background: var(--dt-accent);
-  border-color: var(--dt-accent);
-  color: #fff;
+  border-color: var(--dt-accent-line);
+  color: var(--dt-accent-ink);
 }
 
 .dt-diff {
@@ -608,10 +618,13 @@ html[data-theme="dark"] .dt-sheet-root {
 }
 
 .dt-primary-btn {
-  border: 1px solid transparent;
+  border: 1px solid var(--dt-accent-line);
   background: var(--dt-accent);
-  color: #fff;
+  color: var(--dt-accent-ink);
   box-shadow: var(--dt-shadow-soft);
+  /* 文字描边：浅底深字在任意背景上都能读清 */
+  -webkit-text-stroke: 0.3px currentColor;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .dt-primary-btn:hover:not(:disabled) {
@@ -661,7 +674,7 @@ html[data-theme="dark"] .dt-sheet-root {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   padding: 9px 11px;
-  border-left: 1px solid rgba(255, 255, 255, 0.28);
+  border-left: 1px solid var(--dt-accent-line);
 }
 
 .dt-caret {
@@ -729,7 +742,7 @@ html[data-theme="dark"] .dt-sheet-root {
 /* ---------------- 无障碍 ---------------- */
 
 .dt-sheet-root :focus-visible {
-  outline: 2px solid var(--dt-accent);
+  outline: 2px solid var(--dt-focus);
   outline-offset: 2px;
 }
 
