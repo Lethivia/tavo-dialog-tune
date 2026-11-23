@@ -387,15 +387,80 @@
     return segments;
   }
 
-  var DIFF_TOKEN_LIMIT = 1400;
+  /** 局部细化的上限：超过就整块标记，不再逐字算 */
+  var REFINE_LIMIT = 4000;
 
-  function buildDiff(original, tuned) {
-    var left = tokenize(original);
-    var right = tokenize(tuned);
-    if (left.length > DIFF_TOKEN_LIMIT || right.length > DIFF_TOKEN_LIMIT) {
-      return null; // 过长时不逐字标注，直接并排展示
+  /** 保留换行的按行切分 */
+  function splitLines(text) {
+    var parts = String(text || '').split('\n');
+    var lines = [];
+    for (var i = 0; i < parts.length; i++) {
+      lines.push(i < parts.length - 1 ? parts[i] + '\n' : parts[i]);
     }
-    return diffTokens(left, right);
+    return lines;
+  }
+
+  /**
+   * 把「删掉的片段」和「新增的片段」逐字对齐，得到更细的差异。
+   */
+  function pushRefined(segments, delText, addText) {
+    if (!delText) {
+      if (addText) segments.push({ type: 'add', text: addText });
+      return;
+    }
+    if (!addText) {
+      segments.push({ type: 'del', text: delText });
+      return;
+    }
+    if (delText.length > REFINE_LIMIT || addText.length > REFINE_LIMIT) {
+      segments.push({ type: 'del', text: delText });
+      segments.push({ type: 'add', text: addText });
+      return;
+    }
+    var refined = diffTokens(tokenize(delText), tokenize(addText));
+    for (var i = 0; i < refined.length; i++) segments.push(refined[i]);
+  }
+
+  /**
+   * 差异分段：先按行对齐（便宜，长文本也不吃内存），
+   * 再对「被替换的行」做逐字细化。
+   * 不设长度上限——任何长度的文本都能标出差异。
+   */
+  function buildDiff(original, tuned) {
+    var oText = String(original || '');
+    var tText = String(tuned || '');
+    if (oText === tText) return [];
+
+    var ops = diffTokens(splitLines(oText), splitLines(tText));
+    var segments = [];
+    var i = 0;
+    while (i < ops.length) {
+      if (ops[i].type === 'equal') {
+        segments.push({ type: 'equal', text: ops[i].text });
+        i++;
+        continue;
+      }
+      var dels = [];
+      var adds = [];
+      while (i < ops.length && ops[i].type !== 'equal') {
+        if (ops[i].type === 'del') dels.push(ops[i].text);
+        else adds.push(ops[i].text);
+        i++;
+      }
+      pushRefined(segments, dels.join(''), adds.join(''));
+    }
+    return segments;
+  }
+
+  /** 差异统计：新增与删除了多少字 */
+  function diffStats(segments) {
+    var added = 0;
+    var removed = 0;
+    for (var i = 0; i < segments.length; i++) {
+      if (segments[i].type === 'add') added += segments[i].text.length;
+      else if (segments[i].type === 'del') removed += segments[i].text.length;
+    }
+    return { added: added, removed: removed };
   }
 
   /* =========================================================
@@ -518,8 +583,12 @@
     previewError.hidden = true;
     var diffWrap = el('div', 'dt-diff');
     var tunedBlock = el('div', 'dt-diff__block');
-    var diffHead = el('div', 'dt-diff__head', t('runtime.diff.tuned'));
-    diffHead.setAttribute('data-dt-t', 'runtime.diff.tuned');
+    var diffHead = el('div', 'dt-diff__head');
+    var diffTitle = el('span', 'dt-diff__title', t('runtime.diff.tuned'));
+    diffTitle.setAttribute('data-dt-t', 'runtime.diff.tuned');
+    var diffStat = el('span', 'dt-diff__stat');
+    diffHead.appendChild(diffTitle);
+    diffHead.appendChild(diffStat);
     tunedBlock.appendChild(diffHead);
     var tunedBody = el('div', 'dt-diff__body dt-diff__body--tuned');
     tunedBlock.appendChild(tunedBody);
@@ -570,6 +639,7 @@
       privacy: privacy,
       cands: cands,
       previewError: previewError,
+      diffStat: diffStat,
       tunedBody: tunedBody,
       footLeft: footLeft,
       footRight: footRight,
@@ -897,20 +967,28 @@
     /* 只展示微调后的正文，差异直接内联高亮 */
     dom.tunedBody.textContent = '';
     var segments = buildDiff(model.source, text);
-    if (!segments) {
-      dom.tunedBody.textContent = text;
-    } else {
-      segments.forEach(function (segment) {
-        if (segment.type === 'equal') {
-          dom.tunedBody.appendChild(document.createTextNode(segment.text));
-        } else if (segment.type === 'add') {
-          var add = el('span', 'dt-diff__add', segment.text);
-          dom.tunedBody.appendChild(add);
-        } else {
-          var del = el('span', 'dt-diff__del', segment.text);
-          dom.tunedBody.appendChild(del);
-        }
+    var stats = diffStats(segments);
+
+    segments.forEach(function (segment) {
+      if (segment.type === 'equal') {
+        dom.tunedBody.appendChild(document.createTextNode(segment.text));
+      } else if (segment.type === 'add') {
+        dom.tunedBody.appendChild(el('span', 'dt-diff__add', segment.text));
+      } else {
+        dom.tunedBody.appendChild(el('span', 'dt-diff__del', segment.text));
+      }
+    });
+
+    /* 把差异量直接写出来：这样「没有差异」和「高亮坏了」在界面上能分辨 */
+    if (stats.added || stats.removed) {
+      dom.diffStat.textContent = t('runtime.diff.stats', {
+        added: stats.added,
+        removed: stats.removed
       });
+      dom.diffStat.classList.remove('is-empty');
+    } else {
+      dom.diffStat.textContent = t('runtime.diff.same');
+      dom.diffStat.classList.add('is-empty');
     }
 
     scrollToFirstDiff();

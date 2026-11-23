@@ -374,5 +374,55 @@ assert(
   '最近对话不包含目标之后的消息'
 );
 
+/* 17. 差异算法：长文本、无差异、以及样式契约 */
+console.log('\n17. 差异算法与样式');
+{
+  /* 17.1 长文本（超过旧的长度上限）也要能标出差异 */
+  const longSource = '这是一段很长的测试文本。'.repeat(200);      // ≈ 2200 字
+  const longTuned = longSource.replace('测试文本', '验收文本');
+  store.messages.push({ id: 90, role: 'assistant', content: longSource });
+  await api.open({ kind: 'message', messageId: 90, role: 'assistant' });
+  await tick(10);
+  window.document.querySelector('.dt-textarea').value = '改一下';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  /* 让假模型返回带差异的长文本 */
+  const originalGenerate = tavo.generate;
+  tavo.generate = () => Promise.resolve(longTuned);
+  byText(window.document, '.dt-ghost-btn', '重新生成').click();
+  await tick(40);
+  const longAdds = window.document.querySelectorAll('.dt-diff__add');
+  const longDels = window.document.querySelectorAll('.dt-diff__del');
+  assert(longAdds.length > 0, '超长文本也能标出新增');
+  assert(longDels.length > 0, '超长文本也能标出删除');
+  tavo.generate = originalGenerate;
+
+  /* 17.2 内容完全相同时，明确显示「与原文一致」而不是空白 */
+  store.messages.push({ id: 91, role: 'assistant', content: '一模一样的内容' });
+  await api.open({ kind: 'message', messageId: 91, role: 'assistant' });
+  await tick(10);
+  window.document.querySelector('.dt-textarea').value = '改一下';
+  const gen2 = tavo.generate;
+  tavo.generate = () => Promise.resolve('一模一样的内容');
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(40);
+  assert(
+    window.document.querySelectorAll('.dt-diff__add').length === 0,
+    '内容相同时不产生高亮'
+  );
+  const stat = window.document.querySelector('.dt-diff__stat');
+  assert(!!stat && stat.textContent.length > 0, '显示差异统计');
+  assert(
+    !!stat && stat.textContent.includes('一致'),
+    '内容相同时明确提示「与原文完全一致」'
+  );
+  tavo.generate = gen2;
+
+  /* 17.3 样式契约：CSS 里必须有高亮规则，否则改了类名就静默失效 */
+  const css = readFileSync(resolve(ROOT, 'ui/css/panel.css'), 'utf8');
+  assert(css.includes('.dt-diff__add'), '样式表里有新增高亮规则');
+  assert(css.includes('.dt-diff__del'), '样式表里有删除高亮规则');
+}
+
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);

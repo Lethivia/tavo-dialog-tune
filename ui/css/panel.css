@@ -513,7 +513,9 @@ html[data-theme="dark"] .dt-sheet-root {
   color: var(--dt-add-ink);
   border-radius: 3px;
   padding: 1px 0;
+  font-weight: 650;
   box-shadow: 0 0 0 1px var(--dt-add);
+  border-bottom: 2px solid var(--dt-add-ink);
 }
 
 .dt-diff__del {
@@ -524,6 +526,23 @@ html[data-theme="dark"] .dt-sheet-root {
   text-decoration: line-through;
   text-decoration-thickness: 1px;
   opacity: 0.85;
+}
+
+/* 差异统计：一眼看出改了多少，也区分「没有差异」与「高亮失效」 */
+.dt-diff__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dt-diff__stat {
+  font-weight: 500;
+  color: var(--dt-text-faint);
+}
+
+.dt-diff__stat.is-empty {
+  color: var(--dt-text-soft);
 }
 
 /* ---------------- 降级：就地（内联）展开 ----------------

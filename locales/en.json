@@ -79,5 +79,7 @@
   "runtime.moreActions": "More ways to apply",
   "role.separator": ": ",
   "error.targetChanged": "The target changed, this result was discarded",
-  "releaseNotes.1_0_5": "## What's new\n\n- The inline Tune button now opens the panel at the bottom of the chat page, same as the last-message entry\n- Cross-iframe requests are relayed through the shared parent window, where the host picks them up and acknowledges\n- Fixed the first tap on 'Generate' doing nothing after changing the recent-message count\n- Fixed results being lost when the target changed during generation\n- Fixed two panels appearing when no host was available\n- On versions without message variants the result is applied directly, with an explicit notice\n- Panel text now fully re-renders when the app language changes\n- The plugin description no longer mentions the removed long-press entry\n- Author updated to Lethivia"
+  "runtime.diff.stats": "+{added} / -{removed} chars",
+  "runtime.diff.same": "identical to the original",
+  "releaseNotes.1_0_6": "## What's new\n\n- The difference highlighting no longer has a length limit: lines are aligned first and the changed parts are marked character by character, so long messages show what changed\n- The result header now shows how much was added and removed\n- When the result is identical to the original this is now stated explicitly instead of showing unmarked text\n- Added text is highlighted more clearly (bold plus underline)"
 }
