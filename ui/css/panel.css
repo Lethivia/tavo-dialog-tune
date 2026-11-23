@@ -43,6 +43,12 @@
   display: none;
 }
 
+/* 降级展开时面板被挂在 .dt-msg（pointer-events:none）内部，
+   pointer-events 会继承，所以面板必须自己打开命中。 */
+.dt-sheet-root {
+  pointer-events: auto;
+}
+
 /* 关键：默认的 content-box 会让 width:100% 的元素再加上 padding/border 而溢出屏幕 */
 .dt-sheet-root,
 .dt-sheet-root *,

@@ -95,11 +95,23 @@ function buildZip(entries) {
 const manifest = {
   specVersion: 2,
   id: 'io.github.dialogtune.dialog-tune-min',
-  name: '对话微调（最小排查包）',
-  version: "1.0.4",
+  name: { $t: 'plugin.name' },
+  version: '1.0.4',
   entry: 'entry.js',
-  author: 'Dialog Tune',
-  description: '用于定位导入失败的最小插件包。'
+  author: 'Lethivia',
+  description: { $t: 'plugin.description' },
+  /* specVersion 2 必须带 localization，否则 App 会拒绝安装 */
+  localization: {
+    defaultLocale: 'en',
+    resources: {
+      en: 'locales/en.json'
+    }
+  }
+};
+
+const catalog = {
+  'plugin.name': 'Dialog Tune (minimal)',
+  'plugin.description': 'A minimal plugin package used to isolate plugin import failures.'
 };
 
 const entry = `/* 最小排查包入口：不做任何事，只验证插件包能否被导入。 */
@@ -114,19 +126,23 @@ rmSync(outFile, { force: true });
 
 const entries = [
   ['manifest.json', Buffer.from(JSON.stringify(manifest, null, 2), 'utf8')],
-  ['entry.js', Buffer.from(entry, 'utf8')]
+  ['entry.js', Buffer.from(entry, 'utf8')],
+  ['locales/en.json', Buffer.from(JSON.stringify(catalog, null, 2), 'utf8')]
 ];
 
 /* 优先用系统 zip；失败则用内置写入器 */
 const staged = resolve(DIST, '.minimal-stage');
 rmSync(staged, { recursive: true, force: true });
 mkdirSync(staged, { recursive: true });
+mkdirSync(resolve(staged, 'locales'), { recursive: true });
 writeFileSync(resolve(staged, 'manifest.json'), entries[0][1]);
 writeFileSync(resolve(staged, 'entry.js'), entries[1][1]);
-const result = spawnSync('zip', ['-r', '-q', outFile, 'manifest.json', 'entry.js'], {
-  cwd: staged,
-  stdio: 'pipe'
-});
+writeFileSync(resolve(staged, 'locales/en.json'), entries[2][1]);
+const result = spawnSync(
+  'zip',
+  ['-r', '-q', outFile, 'manifest.json', 'entry.js', 'locales'],
+  { cwd: staged, stdio: 'pipe' }
+);
 let via = '系统 zip';
 if (result.error || result.status !== 0) {
   via = '内置 ZIP 写入器';

@@ -30,6 +30,8 @@
     var btn = root.querySelector('[data-dt-action="tune"]');
     if (!btn) return;
     btn.setAttribute('aria-label', api.t('runtime.inlineButtonLabel'));
+    var label = btn.querySelector('[data-dt-label]');
+    if (label) label.textContent = api.t('actions.dialogTune');
     btn.addEventListener('click', function (event) {
       event.preventDefault();
       event.stopPropagation();
@@ -47,6 +49,18 @@
   if (typeof tavo.message.current !== 'function') {
     root.hidden = true;
     return;
+  }
+
+  /* 语言切换时刷新按钮文案 */
+  try {
+    tavo.plugin.i18n.onChange(function () {
+      var label = root.querySelector('[data-dt-label]');
+      if (label) label.textContent = api.t('actions.dialogTune');
+      var btn = root.querySelector('[data-dt-action="tune"]');
+      if (btn) btn.setAttribute('aria-label', api.t('runtime.inlineButtonLabel'));
+    });
+  } catch (e) {
+    /* 旧版本没有 onChange，忽略 */
   }
 
   tavo.message

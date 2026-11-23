@@ -2,7 +2,7 @@
   "name": "tavo-dialog-tune",
   "version": "1.0.0",
   "private": true,
-  "description": "对话微调 — Tavo 插件：长按即可对 AI 回复或自己的输入做定向微调",
+  "description": "对话微调 — Tavo 插件：点消息下方的微调按钮即可对 AI 回复或自己的输入做定向微调",
   "type": "module",
   "scripts": {
     "icons": "node scripts/make-icons.mjs",

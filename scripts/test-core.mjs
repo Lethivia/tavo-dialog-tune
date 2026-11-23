@@ -10,6 +10,7 @@ import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createFakeTavo } from './fake-tavo.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const catalog = JSON.parse(readFileSync(resolve(ROOT, 'locales/zh-CN.json'), 'utf8'));
@@ -24,158 +25,9 @@ function assert(condition, label, extra = '') {
   }
 }
 
-/* ---------------- 假 Tavo 宿主 ---------------- */
+/* ---------------- 假 Tavo 宿主（与片段测试共用同一份） ---------------- */
 
-const store = {
-  messages: [
-    { id: 1, role: 'user', content: '在吗' },
-    { id: 2, role: 'assistant', content: '我在呢，今天想聊点什么？' },
-    { id: 3, role: 'user', content: '讲个笑话' }
-  ],
-  draft: '',
-  generated: [],
-  variantCalls: [],
-  variables: {},
-  toasts: [],
-  appended: []
-};
-
-const CONFIG = {
-  enabled: true,
-  showInlineButton: true,
-  longPressBehavior: 'pill',
-  defaultUseMemory: false,
-  defaultRecentN: 0,
-  maxRecentN: 50,
-  timeoutSeconds: 60,
-  autoApply: false,
-  contentLanguage: 'source',
-  guidePrompt: 'GUIDE_PROMPT_MARKER'
-};
-
-const listeners = {};
-
-const tavo = {
-  plugin: {
-    i18n: {
-      requestedLocale: 'zh-CN',
-      locale: 'zh-CN',
-      defaultLocale: 'zh-CN',
-      supportedLocales: ['zh-CN', 'en'],
-      t(key, params) {
-        let text = Object.prototype.hasOwnProperty.call(catalog, key) ? catalog[key] : key;
-        if (params) {
-          for (const [name, value] of Object.entries(params)) {
-            text = text.split(`{${name}}`).join(String(value));
-          }
-        }
-        return text;
-      },
-      onChange() {
-        return () => {};
-      }
-    },
-    config: {
-      get(key) {
-        return Object.prototype.hasOwnProperty.call(CONFIG, key) ? CONFIG[key] : null;
-      },
-      all() {
-        return { ...CONFIG };
-      }
-    },
-    on(type, handler) {
-      (listeners[type] = listeners[type] || []).push(handler);
-      return () => {};
-    },
-    emit(type, data) {
-      (listeners[type] || []).forEach((handler) => handler(data));
-      return Promise.resolve();
-    }
-  },
-  message: {
-    get(id) {
-      return Promise.resolve(store.messages.find((m) => m.id === id) || null);
-    },
-    current() {
-      return Promise.resolve(store.messages[1]);
-    },
-    find(range, filter = {}) {
-      let list = store.messages.slice();
-      if (filter.role) list = list.filter((m) => m.role === filter.role);
-      if (filter.hidden === false) list = list.filter((m) => m.hidden !== true);
-      if (typeof range === 'number') return Promise.resolve(list.slice(range, range + 1));
-      if (Array.isArray(range)) {
-        const start = range[0] < 0 ? Math.max(0, list.length + range[0]) : range[0];
-        const end = range[1] < 0 ? list.length + range[1] : range[1];
-        if (range.length === 1) return Promise.resolve(list.slice(start));
-        return Promise.resolve(list.slice(start, end + 1));
-      }
-      return Promise.resolve(list);
-    },
-    update(payload) {
-      const target = store.messages.find((m) => m.id === payload.id);
-      if (target) target.content = payload.content;
-      return Promise.resolve(payload.id);
-    },
-    append(payload) {
-      store.appended.push(payload);
-      return Promise.resolve(99);
-    },
-    variant: {
-      create(messageId, data, options) {
-        store.variantCalls.push({ messageId, data, options });
-        return Promise.resolve(42);
-      },
-      list() {
-        return Promise.resolve([]);
-      },
-      select() {
-        return Promise.resolve(7);
-      }
-    }
-  },
-  input: {
-    get() {
-      return Promise.resolve(store.draft);
-    },
-    set(text) {
-      store.draft = text;
-      return Promise.resolve();
-    }
-  },
-  generate(prompt, options) {
-    store.generated.push({ prompt, options });
-    const n = store.generated.length;
-    return Promise.resolve(`我在这儿，今天想聊点${n === 1 ? '什么' : '别的'}？`);
-  },
-  variable: {
-    get(name, scope = 'chat') {
-      return Promise.resolve(store.variables[`${scope}:${name}`]);
-    },
-    set(name, value, scope = 'chat') {
-      store.variables[`${scope}:${name}`] = value;
-      return Promise.resolve();
-    }
-  },
-  memory: {
-    current() {
-      return Promise.resolve({ id: 1, enabled: true, memories: ['用户喜欢简洁的回答'] });
-    }
-  },
-  utils: {
-    toast(message) {
-      store.toasts.push(message);
-    }
-  },
-  ui: {
-    getInsets() {
-      return { topSafe: 10, topBar: 56, bottomInput: 80, bottomSafe: 20 };
-    },
-    onInsetsChanged() {
-      return () => {};
-    }
-  }
-};
+const { tavo, store } = createFakeTavo(catalog);
 
 /* ---------------- 启动 jsdom ---------------- */
 
@@ -416,6 +268,7 @@ assert(store.appended.length === 1, '菜单里的「作为新消息」生效');
 /* 12. 生成中的加载动画 */
 console.log('\n12. 生成中显示加载动画');
 let resolveGenerate;
+const realGenerateForSpinner = tavo.generate;
 tavo.generate = () => new Promise((resolve) => { resolveGenerate = resolve; });
 await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
 await tick(10);
@@ -430,6 +283,96 @@ assert(
 resolveGenerate('我在这儿，今天想聊点什么？');
 await tick(30);
 assert(window.document.querySelector('.dt-spinner') === null, '生成结束后加载圈消失');
+tavo.generate = realGenerateForSpinner;
+
+/* 13. 数字框失焦后「生成微调」按钮不能被换掉 */
+console.log('\n13. 调整条数后首次点击不丢');
+await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+await tick(10);
+const confirmNode = byText(window.document, '.dt-primary-btn', '生成微调');
+const numberField = window.document.querySelector('.dt-stepper__input');
+numberField.value = '3';
+numberField.dispatchEvent(new window.Event('change', { bubbles: true }));
+numberField.dispatchEvent(new window.Event('blur', { bubbles: true }));
+await tick(10);
+assert(confirmNode.isConnected, '失焦后「生成微调」按钮节点仍在文档里（没被重建）');
+const currentConfirm = byText(window.document, '.dt-primary-btn', '生成微调');
+assert(currentConfirm === confirmNode, '失焦后按钮没有被替换成新节点');
+window.document.querySelector('.dt-textarea').value = '改一改';
+const callsBefore = store.generated.length;
+currentConfirm.click();
+await tick(30);
+assert(store.generated.length === callsBefore + 1, '点一次就真的发起了一次生成');
+
+/* 14. 生成期间切换目标，结果不写进新目标 */
+console.log('\n14. 生成期间切换目标不串写');
+let resolveFirst;
+const realGenerate = tavo.generate;
+tavo.generate = () => new Promise((resolve) => { resolveFirst = resolve; });
+await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+await tick(10);
+window.document.querySelector('.dt-textarea').value = '改一改';
+byText(window.document, '.dt-primary-btn', '生成微调').click();
+await tick(10);
+await api.open({ kind: 'message', messageId: 3, role: 'user' });
+await tick(10);
+resolveFirst('生成结果');
+await tick(30);
+assert(
+  window.document.querySelector('.dt-stage--preview').hidden === true,
+  '上一次生成结果没有进入新目标的预览'
+);
+assert(
+  window.document.querySelector('.dt-sheet__subtitle').textContent.includes('我的'),
+  '面板已经切到新的目标'
+);
+assert(
+  store.toasts.some((msg) => msg.includes('切换了目标')),
+  '给出了「目标已切换」的提示，而不是静默丢弃'
+);
+tavo.generate = realGenerate;
+
+/* 15. 候选版本不可用时退化为直接覆盖 */
+console.log('\n15. 没有候选版本能力时直接覆盖');
+store.variantResult = null;
+await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+await tick(10);
+window.document.querySelector('.dt-textarea').value = '改一改';
+byText(window.document, '.dt-primary-btn', '生成微调').click();
+await tick(30);
+const variantCallsBefore = store.variantCalls.length;
+byText(window.document, '.dt-primary-btn', '应用到消息').click();
+await tick(30);
+assert(
+  store.variantCalls.length === variantCallsBefore + 1,
+  '仍然尝试了写候选版本'
+);
+assert(
+  store.toasts.some((msg) => msg.includes('没有版本记录')),
+  '提示了「该楼层没有版本记录」'
+);
+store.variantResult = undefined;
+
+/* 16. 最近 N 条取的是被微调消息之前的对话 */
+console.log('\n16. 最近 N 条对话取的是目标之前的消息');
+await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+await tick(10);
+window.document.querySelector('.dt-switch').click();          // 打开长记忆
+const stepper = window.document.querySelector('.dt-stepper__input');
+stepper.value = '2';
+stepper.dispatchEvent(new window.Event('change', { bubbles: true }));
+stepper.dispatchEvent(new window.Event('blur', { bubbles: true }));
+await tick(10);
+window.document.querySelector('.dt-textarea').value = '改一改';
+byText(window.document, '.dt-primary-btn', '生成微调').click();
+await tick(30);
+const lastPrompt = store.generated[store.generated.length - 1].prompt;
+assert(lastPrompt.includes('长记忆') || lastPrompt.includes('memory'), '提示词里带上了长记忆');
+assert(lastPrompt.includes('在吗'), '最近对话里包含目标之前的那条消息');
+assert(
+  !lastPrompt.includes('讲个笑话'),
+  '最近对话不包含目标之后的消息'
+);
 
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);

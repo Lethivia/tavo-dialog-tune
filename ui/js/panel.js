@@ -24,21 +24,23 @@
   /* ---- entry → 面板（官方插件事件总线） ---- */
   tavo.plugin.on('dialog-tune-open', function (payload) {
     if (!payload) return;
-    if (payload.kind === 'message') {
-      api.open({
-        kind: 'message',
-        messageId: payload.messageId,
-        role: payload.role
-      });
-    } else {
-      api.open({ kind: 'input' });
-    }
-    /* 回执给入口，让它知道面板确实打开了 */
-    try {
-      tavo.plugin.emit('dialog-tune-opened', {});
-    } catch (e) {
-      /* 忽略 */
-    }
+    var opening =
+      payload.kind === 'message'
+        ? api.open({
+            kind: 'message',
+            messageId: payload.messageId,
+            role: payload.role
+          })
+        : api.open({ kind: 'input' });
+    Promise.resolve(opening).then(function (opened) {
+      /* 只有真的打开了才回执，否则入口会误以为成功而不再提示 */
+      if (!opened) return;
+      try {
+        tavo.plugin.emit('dialog-tune-opened', {});
+      } catch (e) {
+        /* 忽略 */
+      }
+    });
   });
 
   /* ---- entry 中转过来的请求 ---- */
@@ -79,15 +81,20 @@
   }
 
   window.addEventListener('message', onRelayMessage);
+  /* parent 与 top 各自独立 try：一条失败不影响另一条 */
   try {
     if (window.parent && window.parent !== window) {
       window.parent.addEventListener('message', onRelayMessage);
     }
+  } catch (e) {
+    /* 跨域限制下忽略 */
+  }
+  try {
     if (window.top && window.top !== window) {
       window.top.addEventListener('message', onRelayMessage);
     }
   } catch (e) {
-    /* 跨域限制下忽略 */
+    /* 忽略 */
   }
 
   /* ---- 聊天作用域信箱兜底 ---- */
@@ -97,10 +104,12 @@
       .then(function (value) {
         if (!value || !value.id) return;
         api.handleRequest(value);
+        /* 信箱通道没有回执，这里清掉信箱就等于告诉请求方「已接手」，
+           避免请求方 350ms 后又就地展开一个面板，出现两个面板。 */
         return tavo.variable.unset(REQUEST_KEY, 'chat').catch(function () {});
       })
       .catch(function () {});
-  }, 400);
+  }, 300);
 
   /* ---- 聊天切换 ---- */
   tavo.plugin.on('chat:closed', function () {
@@ -110,7 +119,8 @@
   /* ---- 语言切换：完整重渲染 ---- */
   try {
     tavo.plugin.i18n.onChange(function () {
-      api.close();
+      /* 完整重渲染：刷新面板里所有静态文案，而不只是关掉面板 */
+      api.applyStrings();
     });
   } catch (e) {
     /* 旧版本没有 onChange，忽略 */

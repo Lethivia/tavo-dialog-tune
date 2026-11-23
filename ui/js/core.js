@@ -146,7 +146,7 @@
    * ======================================================= */
 
   function loadPrefs() {
-    if (state.prefsLoaded) return Promise.resolve(state.prefs);
+    /* 每次打开都重新读：面板可能运行在另一个文档里，缓存会读到旧值 */
     var conf = settings();
     state.prefs.useMemory = conf.defaultUseMemory === true;
     state.prefs.recentN = clamp(conf.defaultRecentN, 0, conf.maxRecentN);
@@ -157,11 +157,9 @@
           state.prefs.useMemory = value.useMemory === true;
           state.prefs.recentN = clamp(toInt(value.recentN, 0), 0, conf.maxRecentN);
         }
-        state.prefsLoaded = true;
         return state.prefs;
       })
       .catch(function () {
-        state.prefsLoaded = true;
         return state.prefs;
       });
   }
@@ -302,7 +300,7 @@
           var dialogue = recent
             .map(function (item) {
               var who = item.role === 'user' ? t('role.user') : t('role.assistant');
-              return who + '：' + item.content;
+              return who + t('role.separator') + item.content;
             })
             .join('\n');
           parts.push(t('prompt.recentBlock', { dialogue: dialogue }));
@@ -424,23 +422,18 @@
     var titles = el('div', 'dt-sheet__titles');
     var title = el('h2', 'dt-sheet__title', t('runtime.title'));
     title.id = 'dt-sheet-title';
+    title.setAttribute('data-dt-t', 'runtime.title');
     var subtitle = el('p', 'dt-sheet__subtitle');
     titles.appendChild(title);
     titles.appendChild(subtitle);
 
-    var undoBtn = button('dt-ghost-btn dt-sheet__undo', t('runtime.undo'), t('runtime.undo'));
-    undoBtn.hidden = true;
-    undoBtn.addEventListener('click', function () {
-      undoLast();
-    });
-
     var closeBtn = button('dt-icon-btn dt-sheet__close', '✕', t('runtime.close'));
+    closeBtn.setAttribute('data-dt-t-aria', 'runtime.close');
     closeBtn.addEventListener('click', function () {
       closeSheet();
     });
 
     head.appendChild(titles);
-    head.appendChild(undoBtn);
     head.appendChild(closeBtn);
 
     /* ---- 主体：输入态 ---- */
@@ -450,9 +443,11 @@
 
     var field = el('label', 'dt-field');
     var fieldLabel = el('span', 'dt-field__label', t('runtime.field.instruction'));
+    fieldLabel.setAttribute('data-dt-t', 'runtime.field.instruction');
     var textarea = el('textarea', 'dt-textarea');
     textarea.rows = 3;
     textarea.placeholder = t('runtime.field.instructionPlaceholder');
+    textarea.setAttribute('data-dt-t-ph', 'runtime.field.instructionPlaceholder');
     textarea.setAttribute('aria-label', t('runtime.field.instruction'));
     field.appendChild(fieldLabel);
     field.appendChild(textarea);
@@ -460,11 +455,16 @@
     /* 长记忆开关 */
     var memoryRow = el('div', 'dt-row');
     var memoryInfo = el('div', 'dt-row__info');
-    memoryInfo.appendChild(el('span', 'dt-row__label', t('runtime.switch.memory')));
-    memoryInfo.appendChild(el('span', 'dt-row__hint', t('runtime.switch.memoryHint')));
+    var memoryLabel = el('span', 'dt-row__label', t('runtime.switch.memory'));
+    memoryLabel.setAttribute('data-dt-t', 'runtime.switch.memory');
+    var memoryHint = el('span', 'dt-row__hint', t('runtime.switch.memoryHint'));
+    memoryHint.setAttribute('data-dt-t', 'runtime.switch.memoryHint');
+    memoryInfo.appendChild(memoryLabel);
+    memoryInfo.appendChild(memoryHint);
     var memorySwitch = button('dt-switch', '');
     memorySwitch.setAttribute('role', 'switch');
     memorySwitch.setAttribute('aria-label', t('runtime.switch.memory'));
+    memorySwitch.setAttribute('data-dt-t-aria', 'runtime.switch.memory');
     var memoryKnob = el('span', 'dt-switch__knob');
     memorySwitch.appendChild(memoryKnob);
     memoryRow.appendChild(memoryInfo);
@@ -473,18 +473,24 @@
     /* 最近 N 条 */
     var recentRow = el('div', 'dt-row');
     var recentInfo = el('div', 'dt-row__info');
-    recentInfo.appendChild(el('span', 'dt-row__label', t('runtime.switch.recent')));
+    var recentLabel = el('span', 'dt-row__label', t('runtime.switch.recent'));
+    recentLabel.setAttribute('data-dt-t', 'runtime.switch.recent');
     var recentHint = el('span', 'dt-row__hint', t('runtime.switch.recentHint'));
+    recentHint.setAttribute('data-dt-t', 'runtime.switch.recentHint');
     recentInfo.appendChild(recentHint);
     var stepper = el('div', 'dt-stepper');
     var minus = button('dt-stepper__btn', '−', t('runtime.switch.recentMinus'));
+    minus.setAttribute('data-dt-t-aria', 'runtime.switch.recentMinus');
     var number = el('input', 'dt-stepper__input');
+    number.setAttribute('data-dt-t-aria', 'runtime.switch.recent');
     number.type = 'number';
     number.inputMode = 'numeric';
     number.min = '0';
     number.setAttribute('aria-label', t('runtime.switch.recent'));
     var plus = button('dt-stepper__btn', '+', t('runtime.switch.recentPlus'));
+    plus.setAttribute('data-dt-t-aria', 'runtime.switch.recentPlus');
     var unit = el('span', 'dt-stepper__unit', t('runtime.switch.recentUnit'));
+    unit.setAttribute('data-dt-t', 'runtime.switch.recentUnit');
     stepper.appendChild(minus);
     stepper.appendChild(number);
     stepper.appendChild(plus);
@@ -493,6 +499,7 @@
     recentRow.appendChild(stepper);
 
     var privacy = el('p', 'dt-note', t('runtime.privacy'));
+    privacy.setAttribute('data-dt-t', 'runtime.privacy');
 
     var switches = el('div', 'dt-switches');
     switches.appendChild(memoryRow);
@@ -511,7 +518,9 @@
     previewError.hidden = true;
     var diffWrap = el('div', 'dt-diff');
     var tunedBlock = el('div', 'dt-diff__block');
-    tunedBlock.appendChild(el('div', 'dt-diff__head', t('runtime.diff.tuned')));
+    var diffHead = el('div', 'dt-diff__head', t('runtime.diff.tuned'));
+    diffHead.setAttribute('data-dt-t', 'runtime.diff.tuned');
+    tunedBlock.appendChild(diffHead);
     var tunedBody = el('div', 'dt-diff__body dt-diff__body--tuned');
     tunedBlock.appendChild(tunedBody);
 
@@ -547,7 +556,6 @@
       root: root,
       sheet: sheet,
       subtitle: subtitle,
-      undoBtn: undoBtn,
       closeBtn: closeBtn,
       controls: controls,
       switches: switches,
@@ -569,6 +577,7 @@
     };
 
     wireSheetEvents();
+    applyStrings();
     applyInsets();
     try {
       if (tavo.ui && typeof tavo.ui.onInsetsChanged === 'function') {
@@ -621,6 +630,28 @@
     if (dom && dom.menu.contains(event.target)) return;
     if (menuToggle && menuToggle.contains(event.target)) return;
     closeMenu();
+  }
+
+  /** 刷新面板里所有静态文案（语言切换时调用） */
+  function applyStrings() {
+    var dom = state.dom;
+    if (!dom || !dom.root) return;
+    var nodes = dom.root.querySelectorAll('[data-dt-t]');
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var key = node.getAttribute('data-dt-t');
+      if (key === 'runtime.privacy' && state.model && state.model.error) continue;
+      node.textContent = t(key);
+    }
+    var placeholders = dom.root.querySelectorAll('[data-dt-t-ph]');
+    for (var j = 0; j < placeholders.length; j++) {
+      placeholders[j].placeholder = t(placeholders[j].getAttribute('data-dt-t-ph'));
+    }
+    var labels = dom.root.querySelectorAll('[data-dt-t-aria]');
+    for (var k = 0; k < labels.length; k++) {
+      labels[k].setAttribute('aria-label', t(labels[k].getAttribute('data-dt-t-aria')));
+    }
+    updateFooterState();
   }
 
   function wireSheetEvents() {
@@ -679,6 +710,39 @@
    * 面板：渲染
    * ======================================================= */
 
+  /** 只更新已有底部按钮的可用状态，不重建节点 */
+  function updateFooterState() {
+    var dom = state.dom;
+    var model = state.model;
+    if (!dom || !model || !dom.buttons) return;
+    var busy = !!model.busy;
+    if (dom.buttons.confirm) {
+      dom.buttons.confirm.disabled = busy;
+      dom.buttons.confirm.classList.toggle('is-busy', busy);
+      var label = dom.buttons.confirm.querySelector('.dt-btn__label');
+      if (label) label.textContent = busy ? t('runtime.generating') : t('runtime.confirm');
+      toggleSpinner(dom.buttons.confirm, busy);
+    }
+    if (dom.buttons.reroll) {
+      dom.buttons.reroll.disabled = busy;
+      var rerollLabel = dom.buttons.reroll.querySelector('.dt-btn__label');
+      if (rerollLabel) rerollLabel.textContent = t('runtime.reroll');
+      toggleSpinner(dom.buttons.reroll, busy);
+    }
+    if (dom.buttons.main) dom.buttons.main.disabled = busy;
+    if (dom.buttons.toggle) dom.buttons.toggle.disabled = busy;
+  }
+
+  /** 加载圈的挂载与卸载 */
+  function toggleSpinner(node, busy) {
+    var existing = node.querySelector('.dt-spinner');
+    if (busy && !existing) {
+      node.insertBefore(spinner(), node.firstChild);
+    } else if (!busy && existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+  }
+
   function render() {
     var dom = state.dom;
     var model = state.model;
@@ -695,7 +759,10 @@
 
     var max = settings().maxRecentN;
     dom.number.max = String(max);
-    dom.number.value = String(clamp(model.recentN, 0, max));
+    /* 正在输入时不要覆盖玩家键入的值 */
+    if (document.activeElement !== dom.number) {
+      dom.number.value = String(clamp(model.recentN, 0, max));
+    }
     dom.memorySwitch.setAttribute('aria-checked', model.useMemory ? 'true' : 'false');
     dom.memorySwitch.classList.toggle('is-on', model.useMemory);
     dom.recentHint.textContent = t('runtime.switch.recentHint');
@@ -703,7 +770,17 @@
 
     closeMenu();
 
-    /* 底部按钮：只清理普通按钮，保留下拉菜单节点 */
+    /* 底部按钮只在「阶段/目标类型」变化时重建。
+       之前每次 render 都重建，导致用户按下按钮时数字框失焦 → render()
+       → 按钮节点被摘除 → 浏览器不再派发 click（首击必丢）。 */
+    var footKey = model.stage + ':' + (model.target ? model.target.kind : '');
+    if (dom.footKey === footKey) {
+      /* 底部结构不变：只更新状态，内容区照常刷新 */
+      updateFooterState();
+      renderBody(isPreview);
+      return;
+    }
+    dom.footKey = footKey;
     clearChildren(dom.footLeft);
     clearChildren(dom.footRight, dom.menu);
 
@@ -724,6 +801,7 @@
         confirmCompose();
       });
       dom.footRight.appendChild(confirmBtn);
+      dom.buttons = { stage: 'compose', confirm: confirmBtn };
     } else {
       var reroll = actionButton('dt-ghost-btn', t('runtime.reroll'), model.busy);
       reroll.disabled = !!model.busy;
@@ -733,6 +811,7 @@
         runGenerate(true);
       });
       dom.footLeft.appendChild(reroll);
+      dom.buttons = { stage: 'preview', reroll: reroll };
 
       /* 主按钮 + 下拉：把低频操作收进菜单，窄屏也不会换行 */
       var isInput = model.target.kind === 'input';
@@ -761,19 +840,29 @@
       split.appendChild(mainBtn);
       split.appendChild(toggle);
       dom.footRight.appendChild(split);
+      dom.buttons.main = mainBtn;
+      dom.buttons.toggle = toggle;
       buildMenu(isInput);
     }
 
+    renderBody(isPreview);
+  }
+
+  /** 内容区刷新：预览结果或输入态提示 */
+  function renderBody(isPreview) {
+    var dom = state.dom;
+    var model = state.model;
+    if (!dom || !model) return;
     if (isPreview) {
       renderPreview();
+      return;
+    }
+    if (model.error) {
+      dom.privacy.textContent = model.error;
+      dom.privacy.classList.add('is-error');
     } else {
-      if (model.error) {
-        dom.privacy.textContent = model.error;
-        dom.privacy.classList.add('is-error');
-      } else {
-        dom.privacy.textContent = t('runtime.privacy');
-        dom.privacy.classList.remove('is-error');
-      }
+      dom.privacy.textContent = t('runtime.privacy');
+      dom.privacy.classList.remove('is-error');
     }
   }
 
@@ -845,7 +934,7 @@
 
   function openSheet(target, options) {
     var conf = settings();
-    if (!conf.enabled) return;
+    if (!conf.enabled) return Promise.resolve(false);
 
     if (!state.dom) buildSheet();
     /* inline：在当前上下文内以普通文档流展开（宿主不可用时的降级） */
@@ -880,7 +969,7 @@
       .then(function (resolved) {
         if (!resolved.source || !resolved.source.trim()) {
           tavo.utils.toast(t('error.emptyTarget'));
-          return;
+          return false;
         }
         state.model = {
           target: {
@@ -909,9 +998,11 @@
             state.dom.textarea.focus();
           } catch (e) {}
         }, 60);
+        return true;
       })
       .catch(function (error) {
         tavo.utils.toast((error && error.message) || t('error.unknown'));
+        return false;
       });
   }
 
@@ -965,6 +1056,10 @@
         return tavo.generate(prompt, { context: false });
       })
       .then(function (text) {
+        /* 期间可能已经切换了目标（面板被重新打开），这时结果没有归属，丢弃并提示 */
+        if (state.model !== model) {
+          throw Object.assign(new Error(t('error.targetChanged')), { silent: true });
+        }
         var result = text === null || text === undefined ? '' : String(text);
         if (!result.trim()) throw new Error(t('error.emptyResult'));
         model.candidates.push(result);
@@ -978,6 +1073,10 @@
       })
       .catch(function (error) {
         /* 失败时保持当前阶段，原文不会被改动 */
+        if (error && error.silent) {
+          tavo.utils.toast(t('error.targetChanged'));
+          return;
+        }
         model.error = (error && error.message) ? error.message : t('error.generateFailed');
       })
       .then(function () {
@@ -1031,24 +1130,35 @@
     if (!text) return;
     var messageId = model.target.messageId;
 
+    /* 旧版本可能根本没有候选版本能力，此时退化为直接覆盖 */
+    var canUseVariant =
+      typeof tavo.message.variant === 'object' &&
+      tavo.message.variant !== null &&
+      typeof tavo.message.variant.create === 'function';
+
+    function applyPlain() {
+      return tavo.message.update({ id: messageId, content: text }).then(function (updatedId) {
+        tavo.utils.toast(updatedId ? t('runtime.appliedPlain') : t('error.applyFailed'));
+        return updatedId;
+      });
+    }
+
     Promise.resolve()
       .then(function () {
-        return tavo.message.variant.create(messageId, { content: text }, { select: true });
-      })
-      .then(function (variantId) {
-        if (variantId === null || variantId === undefined) {
-          /* 候选存储不可用时退化为直接覆盖 */
-          return tavo.message
-            .update({ id: messageId, content: text })
-            .then(function (updatedId) {
-              tavo.utils.toast(
-                updatedId ? t('runtime.appliedPlain') : t('error.applyFailed')
-              );
-              return updatedId;
-            });
-        }
-        tavo.utils.toast(t('runtime.applied'));
-        return variantId;
+        if (!canUseVariant) return applyPlain();
+        return tavo.message.variant
+          .create(messageId, { content: text }, { select: true })
+          .then(function (variantId) {
+            if (variantId === null || variantId === undefined) {
+              /* 候选存储不可用时退化为直接覆盖 */
+              return applyPlain();
+            }
+            tavo.utils.toast(t('runtime.applied'));
+            return variantId;
+          })
+          .catch(function () {
+            return applyPlain();
+          });
       })
       .then(function () {
         closeSheet();
@@ -1097,35 +1207,6 @@
       })
       .catch(function (error) {
         tavo.utils.toast((error && error.message) || t('error.applyFailed'));
-      });
-  }
-
-  /* =========================================================
-   * 撤销：直接复用原生候选版本
-   * ======================================================= */
-
-  function undoLast() {
-    var model = state.model;
-    if (!model || model.target.kind !== 'message') return;
-    var messageId = model.target.messageId;
-    tavo.message.variant
-      .list(messageId)
-      .then(function (variants) {
-        if (!variants || !variants.length) {
-          tavo.utils.toast(t('error.noVariants'));
-          return null;
-        }
-        var original = variants[variants.length - 1];
-        return tavo.message.variant.select(messageId, original.id);
-      })
-      .then(function (variantId) {
-        if (variantId) {
-          tavo.utils.toast(t('runtime.reverted'));
-          closeSheet();
-        }
-      })
-      .catch(function () {
-        tavo.utils.toast(t('error.noVariants'));
       });
   }
 
@@ -1251,6 +1332,10 @@
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ __dialogTune: 'open', request: request }, '*');
       }
+    } catch (e) {
+      /* 忽略 */
+    }
+    try {
       if (window.top && window.top !== window && window.top !== window.parent) {
         window.top.postMessage({ __dialogTune: 'open', request: request }, '*');
       }
@@ -1266,17 +1351,32 @@
     /* 5) 兜底：350ms 内没人接手，就地打开，保证点击一定有反应 */
     setTimeout(function () {
       if (!pendingRequest || pendingRequest.id !== request.id) return;
-      var fallback = pendingRequest;
-      pendingRequest = null;
-      if (fallback.anchor && fallback.anchor.appendChild) {
-        /* 就地展开：把面板挪到触发它的位置，正常文档流里展开 */
-        try {
-          fallback.anchor.appendChild(state.dom.root);
-        } catch (e) {
-          /* 忽略 */
-        }
-      }
-      openSheet(fallback.target, { inline: true });
+      /* 信箱通道没有回执，但宿主处理完会清掉信箱——所以兜底前再确认一次：
+         信箱里已经没有这条请求，就说明宿主接手了，不要重复展开。 */
+      tavo.variable
+        .get(REQUEST_KEY, 'chat')
+        .then(function (value) {
+          if (!pendingRequest || pendingRequest.id !== request.id) return;
+          if (value && value.id === request.id) {
+            /* 确实没人接手：就地展开，保证点击有反应 */
+            var fallback = pendingRequest;
+            pendingRequest = null;
+            if (fallback.anchor && fallback.anchor.appendChild) {
+              try {
+                fallback.anchor.appendChild(state.dom.root);
+              } catch (e) {
+                /* 忽略 */
+              }
+            }
+            openSheet(fallback.target, { inline: true });
+          }
+        })
+        .catch(function () {
+          if (!pendingRequest || pendingRequest.id !== request.id) return;
+          var fallback = pendingRequest;
+          pendingRequest = null;
+          openSheet(fallback.target, { inline: true });
+        });
     }, 350);
   }
 
@@ -1329,6 +1429,7 @@
     open: openSheet,
     close: closeSheet,
     requestOpen: requestOpen,
+    applyStrings: applyStrings,
     claimHost: claimHost,
     handleRequest: handleRequest,
     isHost: function () {

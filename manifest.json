@@ -2,11 +2,11 @@
   "specVersion": 2,
   "id": "io.github.dialogtune.dialog-tune",
   "name": { "$t": "plugin.name" },
-  "version": "1.0.4",
+  "version": "1.0.5",
   "entry": "entry.js",
   "author": "Lethivia",
   "description": { "$t": "plugin.description" },
-  "releaseNotes": { "$t": "releaseNotes.1_0_4" },
+  "releaseNotes": { "$t": "releaseNotes.1_0_5" },
   "localization": {
     "defaultLocale": "zh-CN",
     "resources": {
@@ -39,14 +39,9 @@
         "mount": "/chat/body/end"
       },
       {
-        "id": "dialog-tune-message-user",
+        "id": "dialog-tune-message",
         "src": "ui/message.html",
-        "mount": "/messages/end?role=user"
-      },
-      {
-        "id": "dialog-tune-message-character",
-        "src": "ui/message.html",
-        "mount": "/messages/end?role=character"
+        "mount": "/messages/end"
       }
     ],
     "settings": {

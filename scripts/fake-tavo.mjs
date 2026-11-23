@@ -67,6 +67,14 @@ export function createFakeTavo(catalog) {
         (listeners[type] = listeners[type] || []).push(handler);
         return () => {};
       },
+      onInputAction(id, handler) {
+        (listeners['inputActions:' + id] = listeners['inputActions:' + id] || []).push(handler);
+        return () => {};
+      },
+      onLastMessageAction(id, handler) {
+        (listeners['lastMessageActions:' + id] = listeners['lastMessageActions:' + id] || []).push(handler);
+        return () => {};
+      },
       emit(type, data) {
         (listeners[type] || []).forEach((handler) => handler(data));
         return Promise.resolve();
@@ -79,18 +87,35 @@ export function createFakeTavo(catalog) {
       current() {
         return Promise.resolve(store.currentMessage);
       },
+      /**
+       * 与真实 API 一致的语义：
+       *   - indexRange 按「楼层」在未过滤的列表上切片，再套用 filter；
+       *   - 空数组 / 空值表示全部；
+       *   - 负数从尾部计数。
+       */
       find(range, filter = {}) {
-        let list = store.messages.slice();
-        if (filter.role) list = list.filter((m) => m.role === filter.role);
-        if (filter.hidden === false) list = list.filter((m) => m.hidden !== true);
-        if (typeof range === 'number') return Promise.resolve(list.slice(range, range + 1));
-        if (Array.isArray(range)) {
-          const start = range[0] < 0 ? Math.max(0, list.length + range[0]) : range[0];
-          const end = range[1] < 0 ? list.length + range[1] : range[1];
-          if (range.length === 1) return Promise.resolve(list.slice(start));
-          return Promise.resolve(list.slice(start, end + 1));
+        const all = store.messages.slice();
+        const applyFilter = (list) => {
+          let out = list;
+          if (filter.role) out = out.filter((m) => m.role === filter.role);
+          if (filter.hidden === false) out = out.filter((m) => m.hidden !== true);
+          return out;
+        };
+        if (range === undefined || range === null) return Promise.resolve(applyFilter(all));
+        if (typeof range === 'number') {
+          const idx = range < 0 ? all.length + range : range;
+          return Promise.resolve(applyFilter(all.slice(idx, idx + 1)));
         }
-        return Promise.resolve(list);
+        if (Array.isArray(range)) {
+          if (range.length === 0) return Promise.resolve(applyFilter(all));
+          let start = range[0];
+          let end = range.length === 1 ? all.length - 1 : range[1];
+          if (start < 0) start = Math.max(0, all.length + start);
+          if (end < 0) end = all.length + end;
+          if (range.length === 1) return Promise.resolve(applyFilter(all.slice(start)));
+          return Promise.resolve(applyFilter(all.slice(start, end + 1)));
+        }
+        return Promise.resolve(applyFilter(all));
       },
       update(payload) {
         const target = store.messages.find((m) => m.id === payload.id);
@@ -104,7 +129,10 @@ export function createFakeTavo(catalog) {
       variant: {
         create(messageId, data, options) {
           store.variantCalls.push({ messageId, data, options });
-          return Promise.resolve(42);
+          if (store.variantResult === 'reject') {
+            return Promise.reject(new Error('variant unavailable'));
+          }
+          return Promise.resolve(store.variantResult === undefined ? 42 : store.variantResult);
         },
         list() {
           return Promise.resolve([]);
@@ -161,7 +189,17 @@ export function createFakeTavo(catalog) {
     }
   };
 
-  return { tavo, store, CONFIG };
+  /** 触发一个已注册的 handler（模拟用户点击原生动作） */
+  function fire(type, payload) {
+    (listeners[type] || []).forEach((handler) => handler(payload));
+  }
+
+  /** 当前已注册的事件与动作 */
+  function registered() {
+    return Object.keys(listeners);
+  }
+
+  return { tavo, store, CONFIG, fire, registered };
 }
 
 /**

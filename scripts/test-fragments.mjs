@@ -27,6 +27,16 @@ function assert(condition, label, extra = '') {
 }
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 
+/** 直接加载一个脚本文件（entry.js 不是 HTML 片段，没有 <script> 标签） */
+function loadScript(window, relativePath) {
+  const code = readFileSync(resolve(ROOT, relativePath), 'utf8');
+  try {
+    window.eval(code);
+  } catch (error) {
+    throw new Error(`加载 ${relativePath} 失败：${error.message}`);
+  }
+}
+
 /** 按 HTML 里的 <script src> 顺序加载对应的本地脚本 */
 function loadFragmentScripts(window, htmlPath) {
   const html = readFileSync(resolve(ROOT, htmlPath), 'utf8');
@@ -40,6 +50,12 @@ function loadFragmentScripts(window, htmlPath) {
     }
   }
   return sources;
+}
+
+async function api_close(window) {
+  const api = window.__dialogTune__;
+  if (api && api.close) api.close();
+  await tick(10);
 }
 
 function makeWindow(fake, BroadcastChannel) {
@@ -257,6 +273,123 @@ console.log('\nE. 兄弟 iframe：借共同父窗口中转（真实拓扑）');
   assert(
     messageWindow.document.querySelector('.dt-sheet-root').hidden,
     '消息侧没有重复打开面板'
+  );
+}
+
+/* ================= F. 没有同源广播时，父窗口中转必须独立可用 ================= */
+console.log('\nF. 禁用同源广播：父窗口中转独立可用');
+{
+  const fake = createFakeTavo(catalog);
+  const pageListeners = [];
+  const page = {
+    addEventListener(type, handler) {
+      if (type === 'message') pageListeners.push(handler);
+    },
+    removeEventListener(type, handler) {
+      const index = pageListeners.indexOf(handler);
+      if (index >= 0) pageListeners.splice(index, 1);
+    },
+    dispatch(data, source) {
+      pageListeners.forEach((handler) => handler({ data, source, type: 'message' }));
+    }
+  };
+
+  const hostWindow = makeWindow(fake);
+  const messageWindow = makeWindow(fake);
+  /* 真机上同源广播不一定连通，这里显式关掉它 */
+  hostWindow.BroadcastChannel = undefined;
+  messageWindow.BroadcastChannel = undefined;
+
+  function attachParent(target) {
+    Object.defineProperty(target, 'parent', {
+      configurable: true,
+      value: {
+        addEventListener: page.addEventListener.bind(page),
+        removeEventListener: page.removeEventListener.bind(page),
+        postMessage(data) {
+          page.dispatch(data, target);
+        }
+      }
+    });
+  }
+  attachParent(hostWindow);
+  attachParent(messageWindow);
+
+  injectBody(hostWindow, 'ui/panel.html');
+  loadFragmentScripts(hostWindow, 'ui/panel.html');
+  injectBody(messageWindow, 'ui/message.html');
+  loadFragmentScripts(messageWindow, 'ui/message.html');
+  await tick(20);
+
+  messageWindow.document.querySelector('[data-dt-action="tune"]').click();
+  await tick(150);
+  const hostSheet = hostWindow.document.querySelector('.dt-sheet-root');
+  assert(!!hostSheet && !hostSheet.hidden, '没有广播时，父窗口中转仍然送达宿主');
+
+  /* 再等过 350ms 兜底窗口，确认消息侧没有又展开一个面板 */
+  await tick(500);
+  assert(
+    messageWindow.document.querySelector('.dt-sheet-root').hidden,
+    '收到回执后消息侧没有再就地展开（不会出现两个面板）'
+  );
+}
+
+/* ================= G. entry.js 的两个原生入口 ================= */
+console.log('\nG. entry.js：输入框 + 菜单与最后一条消息 action bar');
+{
+  const fake = createFakeTavo(catalog);
+  const window = makeWindow(fake, createBroadcastChannelFactory());
+  injectBody(window, 'ui/panel.html');
+  loadFragmentScripts(window, 'ui/panel.html');
+  loadScript(window, 'entry.js');
+  await tick(20);
+
+  assert(fake.registered().includes('inputActions:dialog-tune'), 'entry 注册了输入框动作');
+  assert(
+    fake.registered().includes('lastMessageActions:dialog-tune-last'),
+    'entry 注册了最后一条消息动作'
+  );
+
+  fake.store.draft = '我今天有点累';
+  fake.fire('inputActions:dialog-tune');
+  await tick(60);
+  const sheet = window.document.querySelector('.dt-sheet-root');
+  assert(!!sheet && !sheet.hidden, '输入框「+」菜单的入口能打开面板');
+
+  await api_close(window);
+  fake.fire('lastMessageActions:dialog-tune-last', { chatId: 1, messageId: 2, role: 'assistant' });
+  await tick(60);
+  assert(
+    !window.document.querySelector('.dt-sheet-root').hidden,
+    '最后一条消息 action bar 的入口能打开面板'
+  );
+  assert(
+    window.document.querySelector('.dt-sheet__subtitle').textContent.includes('角色'),
+    'action bar 入口的目标是那条消息'
+  );
+}
+
+/* ================= H. 插件被关闭时要有明确反馈 ================= */
+console.log('\nH. 插件关闭时不静默');
+{
+  const fake = createFakeTavo(catalog);
+  fake.CONFIG.enabled = false;
+  const window = makeWindow(fake, createBroadcastChannelFactory());
+  injectBody(window, 'ui/panel.html');
+  loadFragmentScripts(window, 'ui/panel.html');
+  loadScript(window, 'entry.js');
+  await tick(20);
+
+  fake.store.draft = '我今天有点累';
+  fake.fire('inputActions:dialog-tune');
+  await tick(1000);
+  assert(
+    fake.store.toasts.length > 0,
+    '插件关闭时给出了明确提示，而不是点了没反应'
+  );
+  assert(
+    window.document.querySelector('.dt-sheet-root').hidden,
+    '插件关闭时不会打开面板'
   );
 }
 

@@ -1,13 +1,12 @@
 {
   "plugin.name": "Dialog Tune",
-  "plugin.description": "Dialog Tune applies a targeted edit to an AI reply or to your own draft. Long-press a chat bubble or the input box and a Tune button floats out; tap it to describe the edit, optionally attach long-term memory and the last few messages as background, and the model API bound to the current chat regenerates the whole passage. The result shows only the rewritten text with the differences highlighted inline; nothing is written back until you confirm, and the result is stored as one more version of that message, so you can switch back to the original with Tavo's native version switching. The plugin makes no judgement calls for you: how much to change, what to keep, and whether to replace or append are all yours.",
-  "releaseNotes.1_0_0": "## First release\n\n- Long-press a bubble or the input box to get a floating Tune button\n- Tune panel: edit instruction, long-memory switch, recent-N switch\n- Regenerates the whole passage with the model API bound to the current chat\n- The result shows only the rewritten text, with the differences highlighted inline, plus re-roll\n- Written back as one more version of the message, switchable natively\n- English and Simplified Chinese interfaces",
+  "plugin.description": "Dialog Tune applies a targeted edit to an AI reply or to your own draft. Tap the Tune button under a message, or use the input box '+' menu and the action bar of the last message: describe the edit, optionally attach long-term memory and the last few messages as background, and the model API bound to the current chat regenerates the whole passage. The result shows only the rewritten text with the differences highlighted inline; nothing is written back until you confirm, and the result is stored as one more version of that message, so you can switch back to the original with Tavo's native version switching. The plugin makes no judgement calls for you: how much to change, what to keep, and whether to replace or append are all yours.",
   "actions.dialogTune": "Dialog Tune",
   "settings.info": "Defaults for Dialog Tune. The guiding prompt tells the model how to carry out an edit — rewrite it to match your own writing habits.",
   "settings.enabled": "Enable plugin",
   "settings.header.trigger": "Trigger",
   "settings.showInlineButton": "Show inline Tune button",
-  "settings.showInlineButton.desc": "Adds a small Tune button under every message as a fallback next to long-press.",
+  "settings.showInlineButton.desc": "Shows a small Tune button under every message — the most direct way into a message.",
   "settings.header.context": "Context",
   "settings.defaultUseMemory": "Use long memory by default",
   "settings.defaultUseMemory.desc": "Attach the current chat's long-term memory when the panel opens. Your change is remembered for next time.",
@@ -36,7 +35,6 @@
   "runtime.applyToMessage": "Apply to message",
   "runtime.applyToInput": "Put back in input",
   "runtime.appendAsNew": "As new message",
-  "runtime.undo": "Back to previous version",
   "runtime.copied": "Copied to clipboard",
   "runtime.applied": "Applied as one more version of this message — switch back to the original from the message versions",
   "runtime.appliedPlain": "Message overwritten (this floor keeps no versions, so the original cannot be restored)",
@@ -79,8 +77,7 @@
   "error.appendFailed": "Could not append the message",
   "error.noVariants": "There is no other version to switch to",
   "runtime.moreActions": "More ways to apply",
-  "releaseNotes.1_0_1": "## 1.0.1\n\n- Removed the generation timeout; cancel whenever you like\n- Fixed the edit-request input overflowing the screen\n- Added a loading animation while generating\n- The result now shows only the rewritten text, with the differences highlighted inline\n- Footer buttons moved into an 'Apply' dropdown so they no longer wrap on narrow screens",
-  "releaseNotes.1_0_2": "## 1.0.2\n\n- The panel is now hosted by the chat page: the inline Tune button no longer opens it under the bubble — it now sits at the bottom of the screen and is fully usable\n- Removed the long-press feature and its setting\n- Fixed an error in the generation flow that stopped the result from showing and the differences from being highlighted\n- The edit request stays editable after generating, and your edits feed into 'Re-roll'\n- The inline Tune button is darker and easier to notice",
-  "releaseNotes.1_0_3": "## 1.0.3\n\n- Fixed the Tune button doing nothing: requests between plugin iframes are now delivered over a same-origin broadcast, since the message and chat fragments are sibling iframes\n- The entry no longer pre-checks whether the panel is ready; it waits for an acknowledgement and reports back if nothing answers\n- When no host is available the panel falls back to expanding inline under the message, so a tap always does something\n- Fixed the edit request staying locked after generating; your edits feed into 'Re-roll'\n- Removed the long-press feature and its setting",
-  "releaseNotes.1_0_4": "## 1.0.4\n\n- The inline Tune button now opens the panel at the bottom of the chat page, same as the last-message entry\n- Cross-iframe requests are relayed through the shared parent window, where the host picks them up and acknowledges\n- Author updated to Lethivia"
+  "role.separator": ": ",
+  "error.targetChanged": "The target changed, this result was discarded",
+  "releaseNotes.1_0_5": "## What's new\n\n- The inline Tune button now opens the panel at the bottom of the chat page, same as the last-message entry\n- Cross-iframe requests are relayed through the shared parent window, where the host picks them up and acknowledges\n- Fixed the first tap on 'Generate' doing nothing after changing the recent-message count\n- Fixed results being lost when the target changed during generation\n- Fixed two panels appearing when no host was available\n- On versions without message variants the result is applied directly, with an explicit notice\n- Panel text now fully re-renders when the app language changes\n- The plugin description no longer mentions the removed long-press entry\n- Author updated to Lethivia"
 }

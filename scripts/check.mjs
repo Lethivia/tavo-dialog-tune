@@ -43,7 +43,17 @@ if (!manifest.author || manifest.author.length > 32) fail('author 必须是 1–
 if (!manifest.entry) fail('缺少 entry');
 if (manifest.entry && !existsSync(resolve(ROOT, manifest.entry))) fail(`entry 不存在：${manifest.entry}`);
 if (manifest.cover && !existsSync(resolve(ROOT, manifest.cover))) fail(`cover 不存在：${manifest.cover}`);
-if (!manifest.localization?.defaultLocale) fail('缺少 localization.defaultLocale');
+if (!manifest.name) fail('manifest.name 必填');
+if (!manifest.localization?.defaultLocale) {
+  fail('缺少 localization.defaultLocale（specVersion 2 必填）');
+} else {
+  const resources = Object.keys(manifest.localization?.resources || {});
+  if (!resources.includes(manifest.localization.defaultLocale)) {
+    fail(
+      `localization.defaultLocale（${manifest.localization.defaultLocale}）必须出现在 resources 里`
+    );
+  }
+}
 
 for (const [locale, path] of Object.entries(manifest.localization?.resources || {})) {
   if (!existsSync(resolve(ROOT, path))) fail(`locale 资源不存在：${path}（${locale}）`);
@@ -90,7 +100,7 @@ function walkJs(dir) {
     }
     if (!name.endsWith('.js')) continue;
     const source = readFileSync(full, 'utf8');
-    const pattern = /\bt\(\s*'([^']+)'/g;
+    const pattern = /\bt\(\s*['"]([^'"]+)['"]/g;
     let match;
     while ((match = pattern.exec(source)) !== null) jsKeys.add(match[1]);
   }
@@ -99,7 +109,7 @@ walkJs(resolve(ROOT, 'ui/js'));
 walkJs(resolve(ROOT, 'ui'));
 {
   const source = readFileSync(resolve(ROOT, 'entry.js'), 'utf8');
-  const pattern = /i18n\.t\(\s*'([^']+)'/g;
+  const pattern = /i18n\.t\(\s*['"]([^'"]+)['"]/g;
   let match;
   while ((match = pattern.exec(source)) !== null) jsKeys.add(match[1]);
 }
@@ -162,6 +172,23 @@ const ALLOWED_LAST_MESSAGE_FIELDS = new Set(['id', 'label', 'icon', 'role']);
 const ALLOWED_FRAGMENT_FIELDS = new Set(['id', 'src', 'mount']);
 const ALLOWED_VISIBLE_KEYS = new Set(['inputActions', 'sidebar', 'lastMessageActions', 'chat', 'messages']);
 
+/** 文档列出的挂载点枚举（封闭集合，不能自由拼装） */
+const ALLOWED_CHAT_MOUNTS = new Set([
+  '/chat',
+  '/chat/head/start',
+  '/chat/head/end',
+  '/chat/body/start',
+  '/chat/body/end'
+]);
+const ALLOWED_MESSAGE_MOUNTS = new Set([
+  '/messages/start',
+  '/messages/end',
+  '/messages/start?role=user',
+  '/messages/end?role=character',
+  '/messages/end?position=last',
+  '/messages/end?role=character&position=last'
+]);
+
 /** 设置项类型 → 允许的字段（when 为所有类型通用） */
 const SETTINGS_FIELDS = {
   switch: new Set(['type', 'key', 'label', 'default', 'description', 'when']),
@@ -205,14 +232,30 @@ for (const [index, action] of (contributes.lastMessageActions || []).entries()) 
   }
 }
 
+const fragmentIds = new Set();
 for (const [index, fragment] of (contributes.htmlFragments || []).entries()) {
+  if (fragment.id) {
+    if (fragmentIds.has(fragment.id)) fail(`htmlFragments 的 id 重复：${fragment.id}`);
+    fragmentIds.add(fragment.id);
+  }
   for (const key of Object.keys(fragment)) {
     if (!ALLOWED_FRAGMENT_FIELDS.has(key)) fail(`htmlFragments[${index}] 出现未列出的字段：${key}`);
   }
   if (!fragment.id) fail(`htmlFragments[${index}] 缺少 id`);
   if (!fragment.src) fail(`htmlFragments[${index}] 缺少 src`);
-  if (!fragment.mount || !/^\/(chat|messages)/.test(fragment.mount)) {
-    fail(`htmlFragments[${index}] 的 mount 非法：${fragment.mount}`);
+  if (!fragment.mount) {
+    fail(`htmlFragments[${index}] 缺少 mount`);
+  } else {
+    const mount = fragment.mount;
+    const allowed =
+      mount.startsWith('/chat') ? ALLOWED_CHAT_MOUNTS : ALLOWED_MESSAGE_MOUNTS;
+    if (!allowed.has(mount)) {
+      fail(
+        `htmlFragments[${index}] 的 mount 不在文档列出的挂载点里：${mount}\n` +
+          `       聊天页可用：${[...ALLOWED_CHAT_MOUNTS].join(' ')}\n` +
+          `       消息可用：${[...ALLOWED_MESSAGE_MOUNTS].join(' ')}`
+      );
+    }
   }
 }
 
@@ -267,7 +310,15 @@ schema.forEach((item, index) => {
         if (values.has(value)) fail(`settings.schema[${index}]（select）选项 value 重复：${value}`);
         values.add(value);
       });
+      if (item.default !== undefined && !values.has(item.default)) {
+        fail(
+          `settings.schema[${index}]（select）的 default「${item.default}」不在 options 里`
+        );
+      }
     }
+  }
+  if (type === 'switch' && item.default !== undefined && typeof item.default !== 'boolean') {
+    fail(`settings.schema[${index}]（switch）的 default 必须是布尔值`);
   }
 });
 
