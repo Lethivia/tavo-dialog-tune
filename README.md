@@ -131,8 +131,10 @@ Tavo 的插件 HTML 片段运行在**独立的 iframe** 中（官方文档：原
 
 1. **面板必须由 `/chat` 片段承载**。在消息侧就地渲染，`position: fixed` 会被限制在气泡那个小 iframe 里，
    面板既不在屏幕底部也小到无法操作。
-2. **兄弟 iframe 之间不能靠 `postMessage`**（它只往祖先走）。因此请求走**同源广播 BroadcastChannel**，
-   并保留 DOM 事件、祖先窗口投递、聊天作用域信箱三条备用通道。
+2. **兄弟 iframe 之间不能靠 `postMessage`**（它只往祖先走），同源广播在插件 iframe 之间也不一定连通。
+   因此请求借**共同的父窗口中转**：消息侧把请求 `postMessage` 给父窗口，宿主在父窗口上监听 `message`
+   接单，并用 `event.source` 回执（跨域下也允许 `addEventListener` / `postMessage`）。
+   另外保留同源广播、DOM 事件、聊天作用域信箱三条备用通道。
 
 宿主 350ms 内没有回应，就在消息下方**就地展开**降级，保证点击一定有反应。
 

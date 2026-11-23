@@ -1246,10 +1246,13 @@
       /* 忽略 */
     }
 
-    /* 3) 上级窗口（跨 iframe，宿主可能是祖先） */
+    /* 3) 上级与顶层窗口：宿主会在共同父窗口上监听 message 来接单 */
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ __dialogTune: 'open', request: request }, '*');
+      }
+      if (window.top && window.top !== window && window.top !== window.parent) {
+        window.top.postMessage({ __dialogTune: 'open', request: request }, '*');
       }
     } catch (e) {
       /* 忽略 */

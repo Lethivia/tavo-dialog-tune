@@ -195,5 +195,70 @@ console.log('\nD. 没有宿主：降级为就地展开，保证点击一定有�
   );
 }
 
+/* ================= E. 兄弟 iframe 借共同父窗口中转 ================= */
+console.log('\nE. 兄弟 iframe：借共同父窗口中转（真实拓扑）');
+{
+  const fake = createFakeTavo(catalog);
+  const BC = createBroadcastChannelFactory();
+
+  /* 造一个「页面窗口」，它把收到的 message 派发给所有监听者 */
+  const pageListeners = [];
+  const page = {
+    addEventListener(type, handler) {
+      if (type === 'message') pageListeners.push(handler);
+    },
+    removeEventListener(type, handler) {
+      const index = pageListeners.indexOf(handler);
+      if (index >= 0) pageListeners.splice(index, 1);
+    },
+    dispatch(data, source) {
+      pageListeners.forEach((handler) => handler({ data, source, type: 'message' }));
+    }
+  };
+
+  const hostWindow = makeWindow(fake, BC);
+  const messageWindow = makeWindow(fake, BC);
+
+  /* 两个片段是并列的兄弟 iframe，共享同一个父窗口 */
+  function attachParent(target) {
+    Object.defineProperty(target, 'parent', {
+      configurable: true,
+      value: {
+        addEventListener: page.addEventListener.bind(page),
+        removeEventListener: page.removeEventListener.bind(page),
+        postMessage(data) {
+          page.dispatch(data, target);
+        }
+      }
+    });
+  }
+  attachParent(hostWindow);
+  attachParent(messageWindow);
+
+  injectBody(hostWindow, 'ui/panel.html');
+  loadFragmentScripts(hostWindow, 'ui/panel.html');
+  injectBody(messageWindow, 'ui/message.html');
+  loadFragmentScripts(messageWindow, 'ui/message.html');
+  await tick(20);
+
+  messageWindow.document.querySelector('[data-dt-action="tune"]').click();
+  await tick(120);
+
+  const hostSheet = hostWindow.document.querySelector('.dt-sheet-root');
+  assert(!!hostSheet && !hostSheet.hidden, '宿主通过父窗口中转收到请求并打开面板');
+  assert(
+    hostSheet && hostSheet.parentNode === hostWindow.document.body,
+    '面板由宿主文档承载（聊天页底部），不是消息内联'
+  );
+  assert(
+    !hostSheet.classList.contains('dt-sheet-root--inline'),
+    '不是降级的内联模式'
+  );
+  assert(
+    messageWindow.document.querySelector('.dt-sheet-root').hidden,
+    '消息侧没有重复打开面板'
+  );
+}
+
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);

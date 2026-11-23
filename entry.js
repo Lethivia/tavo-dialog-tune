@@ -39,6 +39,19 @@
     }, 800);
   }
 
+  /* 插件 iframe 之间的中转：消息片段把请求投给共同父窗口，
+     这里再经插件事件总线转给聊天页宿主（宿主会在自己那一层做同样的监听，
+     这里是第二道保险）。不做回执，避免事件总线不通时误取消消息侧的兜底。 */
+  try {
+    window.addEventListener('message', function (event) {
+      var data = event && event.data;
+      if (!data || data.__dialogTune !== 'open' || !data.request) return;
+      tavo.plugin.emit('dialog-tune-open-remote', data.request);
+    });
+  } catch (e) {
+    /* 忽略 */
+  }
+
   /* 输入框「+」菜单 */
   tavo.plugin.onInputAction('dialog-tune', async function () {
     open({ kind: 'input' });

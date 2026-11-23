@@ -41,16 +41,54 @@
     }
   });
 
+  /* ---- entry 中转过来的请求 ---- */
+  tavo.plugin.on('dialog-tune-open-remote', function (request) {
+    if (!request) return;
+    api.handleRequest(request);
+    try {
+      tavo.plugin.emit('dialog-tune-opened', {});
+    } catch (e) {
+      /* 忽略 */
+    }
+  });
+
   /* ---- 同一文档内的请求 ---- */
   document.addEventListener('dialog-tune-request', function (event) {
     api.handleRequest(event && event.detail);
   });
 
-  /* ---- 跨文档（消息片段在 iframe 里） ---- */
-  window.addEventListener('message', function (event) {
+  /* ---- 跨文档（消息片段在 iframe 里） ----
+   *
+   * 插件片段各自跑在独立 iframe 里，/messages 与 /chat 是并列的兄弟：
+   * 同源广播在它们之间不一定连通，而 postMessage 只往祖先窗口投递。
+   * 可靠的做法是借「共同的父窗口」中转——消息侧把请求 postMessage 给它的
+   * parent，宿主在 parent 上监听 message 事件即可收到，并可用 event.source 回执。
+   * 跨域下也允许对父窗口调用 addEventListener / postMessage。
+   */
+  function onRelayMessage(event) {
     var data = event && event.data;
-    if (data && data.__dialogTune === 'open') api.handleRequest(data.request);
-  });
+    if (!data || data.__dialogTune !== 'open' || !data.request) return;
+    api.handleRequest(data.request);
+    try {
+      if (event.source && event.source.postMessage) {
+        event.source.postMessage({ __dialogTune: 'ack', id: data.request.id }, '*');
+      }
+    } catch (e) {
+      /* 忽略 */
+    }
+  }
+
+  window.addEventListener('message', onRelayMessage);
+  try {
+    if (window.parent && window.parent !== window) {
+      window.parent.addEventListener('message', onRelayMessage);
+    }
+    if (window.top && window.top !== window) {
+      window.top.addEventListener('message', onRelayMessage);
+    }
+  } catch (e) {
+    /* 跨域限制下忽略 */
+  }
 
   /* ---- 聊天作用域信箱兜底 ---- */
   setInterval(function () {
