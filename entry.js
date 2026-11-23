@@ -22,10 +22,27 @@
   }
 
   /**
-   * 面板由聊天页片段承载，而片段跑在独立 iframe 里，
-   * 入口这边无法可靠探测它是否就绪——所以不再做前置判断，
-   * 直接发事件，由宿主回执；800ms 内没有回执才给出明确提示。
+   * 面板由聊天页片段承载，并挂在宿主页面文档上。
+   * 入口这边做一次辅助探测（宿主页面文档里有没有面板），
+   * 但不把它当作前置条件——真正的判据是宿主的回执。
    */
+  /** 面板是否真的处于打开状态（存在但隐藏不算） */
+  function panelVisible() {
+    try {
+      var candidates = [];
+      if (typeof document !== 'undefined') candidates.push(document);
+      var frame = window.frameElement;
+      if (frame && frame.ownerDocument) candidates.push(frame.ownerDocument);
+      for (var i = 0; i < candidates.length; i++) {
+        var sheet = candidates[i].querySelector('.dt-sheet-root');
+        if (sheet && !sheet.hidden) return true;
+      }
+    } catch (e) {
+      /* 忽略 */
+    }
+    return false;
+  }
+
   function open(payload) {
     var acknowledged = false;
     var unsubscribe = tavo.plugin.on('dialog-tune-opened', function () {
@@ -34,7 +51,7 @@
     });
     tavo.plugin.emit('dialog-tune-open', payload);
     setTimeout(function () {
-      if (acknowledged) return;
+      if (acknowledged || panelVisible()) return;
       tavo.utils.toast(i18n.t('runtime.panelUnavailable'));
     }, 800);
   }

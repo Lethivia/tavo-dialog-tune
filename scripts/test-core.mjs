@@ -145,19 +145,21 @@ assert(
 console.log('\n7. 面板宿主与跨上下文请求');
 await api.close();
 assert(api.isHost() === false, '默认不是宿主（消息片段所在文档）');
+let received = null;
+const onRequest = (event) => { received = event.detail; };
+window.addEventListener('dialog-tune-request', onRequest);
 api.requestOpen({ kind: 'message', messageId: 2, role: 'assistant' });
 await tick(20);
+window.removeEventListener('dialog-tune-request', onRequest);
+assert(!!received, '请求通过宿主页面窗口的 CustomEvent 发出');
+assert(received && received.messageId === 2, '请求里带着目标消息 id');
+const sheetBefore = window.document.querySelector('.dt-sheet-root');
 assert(
-  store.variables['chat:dialog_tune_request'] &&
-    store.variables['chat:dialog_tune_request'].messageId === 2,
-  '非宿主的请求写进聊天作用域信箱'
-);
-assert(
-  window.document.querySelector('.dt-sheet-root').hidden,
-  '非宿主不会就地渲染面板（避免被限制在气泡容器里）'
+  !sheetBefore || sheetBefore.hidden === true,
+  '非宿主不会自己打开面板（面板由宿主统一承载）'
 );
 api.claimHost();
-api.handleRequest(store.variables['chat:dialog_tune_request']);
+api.handleRequest(received);
 await tick(20);
 assert(
   !window.document.querySelector('.dt-sheet-root').hidden,
@@ -453,7 +455,11 @@ console.log('\n18. 差异算法的精确行为');
     '多行：逐行对齐后再逐字细化',
     show('第一行\n第二行', '第一行\n第二行改')
   );
-  assert(diff('完全一样', '完全一样').length === 0, '完全相同没有差异');
+  assert(
+    diff('完全一样', '完全一样').length === 1 &&
+      diff('完全一样', '完全一样')[0].type === 'equal',
+    '完全相同返回一段 equal（预览区不会空白）'
+  );
   assert(
     diff('', '新增内容').length === 1 && diff('', '新增内容')[0].type === 'add',
     '空原文时全部算新增'
@@ -531,6 +537,62 @@ console.log('\n19. 段落级增删改');
     '段落内容改写：逐字对齐，公共部分保留',
     rewritten
   );
+}
+
+/* 20. 退化与规模：不变量 + 规模上限 */
+console.log('\n20. 退化与规模');
+{
+  const diff = api.diff;
+
+  /* 20.1 文本守恒：公共 + 删除 === 原文；公共 + 新增 === 新文（不丢字、不重字） */
+  const pairs = [
+    ['今天天气不错。\n明天见。', '今天天气很好。\n明天见。'],
+    ['甲段。\n乙段。\n丙段。', '甲段。\n乙段。\n新增段。\n丙段。'],
+    ['甲段。\n乙段。\n丙段。', '甲段。\n丙段。'],
+    ['甲段。\n乙段。\n丙段。', '甲段。\n新增段。\n乙段改。\n丙段。'],
+    ['正文内容。', '开头的铺垫。\n正文内容。\n结尾的收束。'],
+    ['Hello world\nsecond line', 'Hello there\nsecond line'],
+    ['', '只有新增'],
+    ['只有删除', ''],
+    ['完全一样', '完全一样'],
+    ['重复。\n重复。\n重复。', '重复。\n重复。']
+  ];
+  /* 按顺序交错重建：原文 = equal₁+del₁+equal₂+…，新文 = equal₁+add₁+equal₂+…
+     结尾换行做归一化：实现里为统一切分粒度会给两边补一个结尾换行，
+     它不参与内容比较（渲染上也看不出来）。 */
+  const stripTail = (text) => text.replace(/\n$/, '');
+  const rebuild = (segs, kind) => {
+    let out = '';
+    for (const seg of segs) if (seg.type === 'equal' || seg.type === kind) out += seg.text;
+    return stripTail(out);
+  };
+  let conserved = true;
+  let detail = '';
+  for (const [before, after] of pairs) {
+    const segs = diff(before, after);
+    if (rebuild(segs, 'del') !== stripTail(before) || rebuild(segs, 'add') !== stripTail(after)) {
+      conserved = false;
+      detail = `${JSON.stringify(before)} → ${JSON.stringify(after)} 得到 ${JSON.stringify(segs)}`;
+      break;
+    }
+  }
+  assert(conserved, '文本守恒：按顺序重建能还原原文与新文（不丢字、不重字）', detail);
+
+  /* 20.2 规模上限：1 万字全部不同 → 塌缩成 2 段 */
+  const big = '甲乙丙丁戊。\n'.repeat(1000);
+  const bigChanged = '子丑寅卯辰。\n'.repeat(1000);
+  const bigSegs = diff(big, bigChanged);
+  assert(bigSegs.length <= 2, '全文皆改时塌缩成整块删除+整块新增', String(bigSegs.length));
+  assert(bigSegs.length <= 700, '任何输入下分段数不超过 700（DOM 节点上限）', String(bigSegs.length));
+
+  /* 20.3 性能：1 万字少量修改应在 100ms 内 */
+  const perfText = '甲乙丙丁戊。\n'.repeat(1000);
+  const perfEdited = perfText.replace('戊。\n甲乙丙丁戊。', '戊改。\n甲乙丙丁戊。');
+  const t0 = Date.now();
+  const perfSegs = diff(perfText, perfEdited);
+  const elapsed = Date.now() - t0;
+  assert(elapsed < 100, `1 万字差异计算在 100ms 内（实测 ${elapsed}ms）`);
+  assert(perfSegs.length <= 700, '1 万字场景分段数在上限内', String(perfSegs.length));
 }
 
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));

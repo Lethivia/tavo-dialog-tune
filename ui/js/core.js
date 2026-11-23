@@ -52,7 +52,7 @@
   }
 
   function el(tag, className, text) {
-    var node = document.createElement(tag);
+    var node = PAGE.doc.createElement(tag);
     if (className) node.className = className;
     if (text !== undefined && text !== null) node.textContent = String(text);
     return node;
@@ -103,6 +103,29 @@
   /* =========================================================
    * 状态
    * ======================================================= */
+
+  /**
+   * 宿主页面文档与窗口。
+   * 插件片段跑在独立 iframe 里，若把面板建在片段自己的文档中，
+   * fixed 定位会被限制在那个 iframe 的范围内（面板不在屏幕底部、也小得没法用）。
+   * 社区插件的通行做法是把 UI 挂到宿主页面文档上，用 frameElement 拿到。
+   */
+  function pageContext() {
+    var doc = document;
+    var win = window;
+    try {
+      var frame = window.frameElement;
+      if (frame && frame.ownerDocument) {
+        doc = frame.ownerDocument;
+        win = doc.defaultView || window;
+      }
+    } catch (e) {
+      /* 跨域时取不到，退回当前文档 */
+    }
+    return { doc: doc, win: win };
+  }
+
+  var PAGE = pageContext();
 
   var state = {
     /** 面板 DOM 引用 */
@@ -179,12 +202,12 @@
    * ======================================================= */
 
   function ensureStyles() {
-    if (document.querySelector('link[data-dt-style]')) return;
-    var link = document.createElement('link');
+    if (PAGE.doc.querySelector('link[data-dt-style]')) return;
+    var link = PAGE.doc.createElement('link');
     link.rel = 'stylesheet';
     link.href = ASSET_BASE + 'css/panel.css';
     link.setAttribute('data-dt-style', '1');
-    document.head.appendChild(link);
+    PAGE.doc.head.appendChild(link);
   }
 
   /* =========================================================
@@ -211,7 +234,7 @@
 
     /* 兜底：宿主会把边界写成内联 CSS 变量，从承载元素上读回来 */
     try {
-      var host = document.querySelector('[style*="--tavo-inset-"]');
+      var host = PAGE.doc.querySelector('[style*="--tavo-inset-"]');
       if (host && window.getComputedStyle) {
         var computed = getComputedStyle(host);
         Object.keys(result).forEach(function (key) {
@@ -402,6 +425,10 @@
   var PAIR_THRESHOLD = 0.5;
   /** 未配对单位的输出上限：超过就合并成整块 */
   var TAIL_LIMIT = 400;
+  /** 相似度计算里的 LCS 规模上限 */
+  var SIMILARITY_DIFF_LIMIT = 1000000;
+  /** 最终分段总数上限（分段数即 DOM 节点数） */
+  var SEGMENT_HARD_LIMIT = 700;
 
   /** 保留换行的按行切分；结尾的空行不算一个单位 */
   function splitLines(text) {
@@ -436,9 +463,28 @@
     return units && units.length ? units : [str];
   }
 
+  /** 字符级 LCS 比率（带规模上限，超限返回 0） */
+  function lcsRatio(a, b) {
+    var n = a.length;
+    var m = b.length;
+    if (!n || !m) return 0;
+    if (n * m > SIMILARITY_DIFF_LIMIT) return 0;
+    var width = m + 1;
+    var table = new Uint16Array((n + 1) * width);
+    for (var i = n - 1; i >= 0; i--) {
+      for (var j = m - 1; j >= 0; j--) {
+        table[i * width + j] =
+          a.charAt(i) === b.charAt(j)
+            ? table[(i + 1) * width + j + 1] + 1
+            : Math.max(table[(i + 1) * width + j], table[i * width + j + 1]);
+      }
+    }
+    return (2 * table[0]) / (n + m);
+  }
+
   /**
-   * 两个单位的相似度：公共前缀 + 公共后缀占较长者的比例。
-   * 用来判断「删掉的这段」和「新增的这段」是不是同一处的改写。
+   * 两个单位的相似度：取「公共前后缀占比」与「字符级 LCS 比率」的较大者。
+   * 只看前后缀时，开头被改就会把整段判死；只看 LCS 又会丢掉尾部信息。
    */
   function unitSimilarity(a, b) {
     var minLen = Math.min(a.length, b.length);
@@ -446,7 +492,9 @@
     while (pre < minLen && a.charAt(pre) === b.charAt(pre)) pre++;
     var suf = 0;
     while (suf < minLen - pre && a.charAt(a.length - 1 - suf) === b.charAt(b.length - 1 - suf)) suf++;
-    return (pre + suf) / Math.max(a.length, b.length, 1);
+    var edge = (pre + suf) / Math.max(a.length, b.length, 1);
+    var lcs = lcsRatio(a, b);
+    return Math.max(edge, lcs);
   }
 
   /**
@@ -480,7 +528,8 @@
   function buildDiff(original, tuned) {
     var oText = String(original || '');
     var tText = String(tuned || '');
-    if (oText === tText) return [];
+    /* 完全相同也要返回一段 equal：否则预览区会是空的 */
+    if (oText === tText) return oText ? [{ type: 'equal', text: oText }] : [];
 
     /* 两段文本必须用同一种切分粒度，否则单位不可比 */
     var byLines = oText.indexOf('\n') >= 0 || tText.indexOf('\n') >= 0;
@@ -563,6 +612,36 @@
     }
     /* 合并相邻同类段：视觉上一样，但 DOM 节点少一个数量级 */
     var merged = mergeSegments(segments);
+
+    /* 全文皆改（没有任何公共部分）：塌缩成「整块删除 + 整块新增」，
+       避免出现几百个没有信息量的红绿块。 */
+    var hasCommon = false;
+    for (var mi = 0; mi < merged.length; mi++) {
+      if (merged[mi].type === 'equal' && merged[mi].text) {
+        hasCommon = true;
+        break;
+      }
+    }
+    if (!hasCommon && oText && tText) {
+      return [
+        { type: 'del', text: oText },
+        { type: 'add', text: tText }
+      ];
+    }
+
+    /* 分段总数硬上限：分段数即 DOM 节点数，超了就合并成整块 */
+    if (merged.length > SEGMENT_HARD_LIMIT) {
+      var collapsedDel = '';
+      var collapsedAdd = '';
+      for (var ci = 0; ci < merged.length; ci++) {
+        if (merged[ci].type === 'del') collapsedDel += merged[ci].text;
+        else if (merged[ci].type === 'add') collapsedAdd += merged[ci].text;
+      }
+      return [
+        { type: 'del', text: collapsedDel },
+        { type: 'add', text: collapsedAdd }
+      ];
+    }
     /* 去掉为了对齐补上的那个结尾换行 */
     if (byLines && merged.length) {
       var last = merged[merged.length - 1];
@@ -758,7 +837,7 @@
     sheet.appendChild(foot);
     root.appendChild(backdrop);
     root.appendChild(sheet);
-    document.body.appendChild(root);
+    PAGE.doc.body.appendChild(root);
 
     state.dom = {
       root: root,
@@ -826,7 +905,7 @@
     if (!dom) return;
     dom.menu.hidden = !open;
     if (menuToggle) menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) document.addEventListener('pointerdown', onMenuOutside, true);
+    if (open) PAGE.doc.addEventListener('pointerdown', onMenuOutside, true);
     else document.removeEventListener('pointerdown', onMenuOutside, true);
   }
 
@@ -905,7 +984,7 @@
       }
     });
 
-    document.addEventListener('keydown', function (event) {
+    PAGE.doc.addEventListener('keydown', function (event) {
       if (event.key !== 'Escape' || !state.dom || state.dom.root.hidden) return;
       if (!state.dom.menu.hidden) {
         closeMenu();
@@ -1110,7 +1189,7 @@
 
     segments.forEach(function (segment) {
       if (segment.type === 'equal') {
-        dom.tunedBody.appendChild(document.createTextNode(segment.text));
+        dom.tunedBody.appendChild(PAGE.doc.createTextNode(segment.text));
       } else if (segment.type === 'add') {
         dom.tunedBody.appendChild(el('span', 'dt-diff__add', segment.text));
       } else {
@@ -1149,15 +1228,11 @@
    * 面板：打开与关闭
    * ======================================================= */
 
-  function openSheet(target, options) {
+  function openSheet(target) {
     var conf = settings();
     if (!conf.enabled) return Promise.resolve(false);
 
     if (!state.dom) buildSheet();
-    /* inline：在当前上下文内以普通文档流展开（宿主不可用时的降级） */
-    if (state.dom) {
-      state.dom.root.classList.toggle('dt-sheet-root--inline', !!(options && options.inline));
-    }
     state.lastFocused = document.activeElement;
 
     return loadPrefs()
@@ -1227,9 +1302,8 @@
     if (!state.dom) return;
     state.dom.root.hidden = true;
     state.dom.root.classList.remove('is-open');
-    state.dom.root.classList.remove('dt-sheet-root--inline');
-    if (state.dom.root.parentNode && state.dom.root.parentNode !== document.body) {
-      document.body.appendChild(state.dom.root);
+    if (state.dom.root.parentNode && state.dom.root.parentNode !== PAGE.doc.body) {
+      PAGE.doc.body.appendChild(state.dom.root);
     }
     state.model = null;
     if (state.lastFocused && typeof state.lastFocused.focus === 'function') {
@@ -1328,7 +1402,7 @@
   function legacyCopy(text) {
     var area = el('textarea', 'dt-hidden-copy');
     area.value = text;
-    document.body.appendChild(area);
+    PAGE.doc.body.appendChild(area);
     area.select();
     var ok = false;
     try {
@@ -1336,7 +1410,7 @@
     } catch (e) {
       ok = false;
     }
-    document.body.removeChild(area);
+    if (area.parentNode) area.parentNode.removeChild(area);
     tavo.utils.toast(ok ? t('runtime.copied') : t('error.copyFailed'));
   }
 
@@ -1436,11 +1510,11 @@
    * 消息片段只负责发请求。
    * ======================================================= */
 
-  var REQUEST_KEY = 'dialog_tune_request';
   var CHANNEL_NAME = 'dialog-tune';
+  var EVENT_REQUEST = 'dialog-tune-request';
+  var EVENT_ACK = 'dialog-tune-ack';
 
-  /* 同源广播：这是唯一能跨「兄弟 iframe」的通道
-   * （/messages 与 /chat 是并列的插件 iframe，postMessage 只往祖先走） */
+  /* 同源广播：作为主通道之外的备用 */
   var channel = null;
   try {
     channel = new BroadcastChannel(CHANNEL_NAME);
@@ -1448,16 +1522,45 @@
     channel = null;
   }
 
-  /** 待本地兜底处理的请求 */
+  /** 待宿主接手的请求 */
   var pendingRequest = null;
 
-  /** 认领面板宿主（由聊天页片段调用） */
+  /** 认领面板宿主（由聊天页片段调用）：面板只建一份，且建在宿主页面文档上 */
   function claimHost() {
     state.isHost = true;
+    if (!state.dom) {
+      try {
+        buildSheet();
+      } catch (e) {
+        /* 宿主页面尚未就绪，打开面板时会重建 */
+      }
+    }
   }
 
   function makeRequestId() {
     return 'dt-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  }
+
+  /**
+   * 在「宿主页面窗口」上派发自定义事件。
+   * 这是社区插件的通行做法：两个片段都能通过
+   * window.frameElement.ownerDocument.defaultView 拿到同一个宿主窗口，
+   * 在它上面收发 CustomEvent 即可互通（跨 iframe 最省事的一条路）。
+   */
+  function emitOnPage(name, detail) {
+    try {
+      var event;
+      try {
+        event = new CustomEvent(name, { detail: detail });
+      } catch (e) {
+        event = PAGE.doc.createEvent('CustomEvent');
+        event.initCustomEvent(name, false, false, detail);
+      }
+      PAGE.win.dispatchEvent(event);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   /** 宿主侧：处理来自其它上下文的打开请求（按 id 去重） */
@@ -1473,9 +1576,10 @@
     });
   }
 
-  /** 回执：告诉发起方「已有人接手」，让它不要再本地兜底打开 */
-  function acknowledge(request, source) {
+  /** 回执：告诉发起方「已有人接手」，让它不要再等 */
+  function acknowledge(request) {
     if (!request || !request.id) return;
+    emitOnPage(EVENT_ACK, { id: request.id });
     if (channel) {
       try {
         channel.postMessage({ type: 'ack', id: request.id });
@@ -1484,9 +1588,7 @@
       }
     }
     try {
-      if (source && source.postMessage) {
-        source.postMessage({ __dialogTune: 'ack', id: request.id }, '*');
-      } else if (window.parent && window.parent !== window) {
+      if (window.parent && window.parent !== window) {
         window.parent.postMessage({ __dialogTune: 'ack', id: request.id }, '*');
       }
     } catch (e) {
@@ -1494,8 +1596,8 @@
     }
   }
 
-  /** 非宿主收到广播时，继续往上级窗口转发，层层上抛直到找到宿主 */
-  function forwardUpward(request, source) {
+  /** 非宿主收到请求时继续往上级窗口转发 */
+  function forwardUpward(request) {
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ __dialogTune: 'open', request: request }, '*');
@@ -1506,10 +1608,15 @@
   }
 
   /**
-   * 打开微调面板。本文档是宿主时直接打开；
-   * 否则把请求转发给宿主（同文档 DOM 事件 → 上级窗口 postMessage → 聊天作用域信箱）。
+   * 打开微调面板。
+   * 本文档是宿主时直接打开；否则把请求发给宿主：
+   *   1) 宿主页面窗口的 CustomEvent（主通道，同步送达）
+   *   2) 同源广播
+   *   3) 同一文档的 DOM 事件
+   *   4) 上级 / 顶层窗口的 postMessage
+   * 都不通时给出明确提示——面板已经挂在宿主页面上，没法再退回气泡里展开。
    */
-  function requestOpen(target, anchor) {
+  function requestOpen(target) {
     if (!settings().enabled) return;
     if (state.isHost) {
       openSheet(target);
@@ -1523,10 +1630,13 @@
       role: target.role || null
     };
 
-    /* 先登记待兜底的请求：广播是同步投递的，回执可能先于下面的赋值到达 */
-    pendingRequest = { id: request.id, target: target, anchor: anchor || null };
+    /* 先登记：通道是同步送达的，回执可能先于下面的赋值到达 */
+    pendingRequest = { id: request.id, target: target };
 
-    /* 1) 同源广播：跨兄弟 iframe 的可靠通道 */
+    /* 1) 宿主页面窗口事件 */
+    emitOnPage(EVENT_REQUEST, request);
+
+    /* 2) 同源广播 */
     if (channel) {
       try {
         channel.postMessage({ type: 'open', request: request });
@@ -1535,16 +1645,16 @@
       }
     }
 
-    /* 2) 同一文档 */
+    /* 3) 同一文档 */
     try {
       document.dispatchEvent(
-        new CustomEvent('dialog-tune-request', { detail: request, bubbles: true })
+        new CustomEvent(EVENT_REQUEST, { detail: request, bubbles: true })
       );
     } catch (e) {
       /* 忽略 */
     }
 
-    /* 3) 上级与顶层窗口：宿主会在共同父窗口上监听 message 来接单 */
+    /* 4) 上级与顶层窗口 */
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ __dialogTune: 'open', request: request }, '*');
@@ -1560,44 +1670,38 @@
       /* 忽略 */
     }
 
-    /* 4) 聊天作用域信箱 */
-    tavo.variable
-      .set(REQUEST_KEY, request, 'chat')
-      .catch(function () {});
-
-    /* 5) 兜底：350ms 内没人接手，就地打开，保证点击一定有反应 */
+    /* 5) 兜底：600ms 内没人接手，给出明确提示而不是无声无息 */
     setTimeout(function () {
       if (!pendingRequest || pendingRequest.id !== request.id) return;
-      /* 信箱通道没有回执，但宿主处理完会清掉信箱——所以兜底前再确认一次：
-         信箱里已经没有这条请求，就说明宿主接手了，不要重复展开。 */
-      tavo.variable
-        .get(REQUEST_KEY, 'chat')
-        .then(function (value) {
-          if (!pendingRequest || pendingRequest.id !== request.id) return;
-          if (value && value.id === request.id) {
-            /* 确实没人接手：就地展开，保证点击有反应 */
-            var fallback = pendingRequest;
-            pendingRequest = null;
-            if (fallback.anchor && fallback.anchor.appendChild) {
-              try {
-                fallback.anchor.appendChild(state.dom.root);
-              } catch (e) {
-                /* 忽略 */
-              }
-            }
-            openSheet(fallback.target, { inline: true });
-          }
-        })
-        .catch(function () {
-          if (!pendingRequest || pendingRequest.id !== request.id) return;
-          var fallback = pendingRequest;
-          pendingRequest = null;
-          openSheet(fallback.target, { inline: true });
-        });
-    }, 350);
+      pendingRequest = null;
+      tavo.utils.toast(t('runtime.panelUnavailable'));
+    }, 600);
   }
 
-  /* 监听同源广播：宿主接手并回执；非宿主继续上抛 */
+  /* 宿主页面窗口：请求与回执 */
+  try {
+    PAGE.win.addEventListener(EVENT_REQUEST, function (event) {
+      var request = event && event.detail;
+      if (!request) return;
+      if (state.isHost) {
+        handleRequest(request);
+        acknowledge(request);
+      } else {
+        forwardUpward(request);
+      }
+    });
+    PAGE.win.addEventListener(EVENT_ACK, function (event) {
+      var detail = event && event.detail;
+      /* 只认自己的那次回执，否则会被别的请求的迟到回执误清 */
+      if (detail && pendingRequest && detail.id === pendingRequest.id) {
+        pendingRequest = null;
+      }
+    });
+  } catch (e) {
+    /* 忽略 */
+  }
+
+  /* 同源广播：宿主接手并回执；非宿主继续上抛 */
   if (channel) {
     channel.addEventListener('message', function (event) {
       var data = event && event.data;
@@ -1610,26 +1714,25 @@
           forwardUpward(data.request);
         }
       } else if (data.type === 'ack') {
-        /* 有人接手了，本地兜底不必再打开 */
-        pendingRequest = null;
+        if (pendingRequest && data.id === pendingRequest.id) pendingRequest = null;
       }
     });
   }
 
-  /* 监听来自祖先窗口的回执与请求 */
+  /* 来自祖先窗口的回执与请求 */
   window.addEventListener('message', function (event) {
     var data = event && event.data;
     if (!data) return;
     if (data.__dialogTune === 'ack') {
-      pendingRequest = null;
+      if (pendingRequest && data.id === pendingRequest.id) pendingRequest = null;
       return;
     }
     if (data.__dialogTune === 'open' && data.request) {
       if (state.isHost) {
         handleRequest(data.request);
-        acknowledge(data.request, event.source);
+        acknowledge(data.request);
       } else {
-        forwardUpward(data.request, event.source);
+        forwardUpward(data.request);
       }
     }
   });
@@ -1659,10 +1762,4 @@
     }
   };
 
-  /* 预建面板 DOM：避免首次打开的抖动，也让入口可以探测面板是否就绪 */
-  try {
-    buildSheet();
-  } catch (e) {
-    /* 宿主 DOM 尚未就绪时忽略，打开面板时会重建 */
-  }
 })();
