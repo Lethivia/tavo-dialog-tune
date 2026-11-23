@@ -96,7 +96,7 @@ const manifest = {
   specVersion: 2,
   id: 'io.github.dialogtune.dialog-tune-min',
   name: '对话微调（最小排查包）',
-  version: "1.0.2",
+  version: "1.0.3",
   entry: 'entry.js',
   author: 'Dialog Tune',
   description: '用于定位导入失败的最小插件包。'
@@ -109,7 +109,7 @@ tavo.plugin.onInputAction('noop', async function () {
 `;
 
 mkdirSync(DIST, { recursive: true });
-const outFile = resolve(DIST, 'dialog-tune-minimal-1.0.2.zip');
+const outFile = resolve(DIST, 'dialog-tune-minimal-1.0.3.zip');
 rmSync(outFile, { force: true });
 
 const entries = [

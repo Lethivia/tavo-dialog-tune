@@ -1,0 +1,199 @@
+/**
+ * 片段集成测试：加载真实的 panel.html / message.html 与三个脚本
+ *
+ * 覆盖两种拓扑：
+ *   A. 同文档 —— 消息片段与聊天页片段共享一个 document；
+ *   B. 跨文档 —— 消息片段在另一个 document（模拟 iframe），面板必须由
+ *      聊天页宿主渲染，不能被限制在消息侧。
+ *
+ * 用法：node scripts/test-fragments.mjs
+ */
+import { JSDOM } from 'jsdom';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createFakeTavo, createBroadcastChannelFactory } from './fake-tavo.mjs';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const catalog = JSON.parse(readFileSync(resolve(ROOT, 'locales/zh-CN.json'), 'utf8'));
+
+let failures = 0;
+function assert(condition, label, extra = '') {
+  if (condition) console.log('  ✓', label);
+  else {
+    failures++;
+    console.log('  ✗', label, extra);
+  }
+}
+const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
+
+/** 按 HTML 里的 <script src> 顺序加载对应的本地脚本 */
+function loadFragmentScripts(window, htmlPath) {
+  const html = readFileSync(resolve(ROOT, htmlPath), 'utf8');
+  const sources = [...html.matchAll(/<script src="\/plugins\/[^"]+\/ui\/([^"]+)"><\/script>/g)].map((m) => m[1]);
+  for (const src of sources) {
+    const code = readFileSync(resolve(ROOT, 'ui', src), 'utf8');
+    try {
+      window.eval(code);
+    } catch (error) {
+      throw new Error(`加载 ${src} 失败：${error.message}`);
+    }
+  }
+  return sources;
+}
+
+function makeWindow(fake, BroadcastChannel) {
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', {
+    url: 'https://tavo.local/chat',
+    pretendToBeVisual: true,
+    runScripts: 'outside-only'
+  });
+  dom.window.tavo = fake.tavo;
+  /* jsdom 没有 BroadcastChannel，换成跨文档共享的等价实现 */
+  dom.window.BroadcastChannel = BroadcastChannel || createBroadcastChannelFactory();
+  /* 收集未捕获异常，真实宿主里这类异常会被静默吞掉 */
+  dom.window.addEventListener('error', (event) => {
+    console.log('    [未捕获异常]', event.error && event.error.message);
+  });
+  return dom.window;
+}
+
+/* 把片段的 HTML 主体塞进文档（去掉 script 标签，脚本由 loadFragmentScripts 加载） */
+function injectBody(window, htmlPath) {
+  const html = readFileSync(resolve(ROOT, htmlPath), 'utf8');
+  const body = html.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<link[^>]*>/g, '');
+  window.document.body.insertAdjacentHTML('beforeend', body);
+}
+
+console.log('\n对话微调 · 片段集成测试\n');
+
+/* ================= A. 同文档 ================= */
+console.log('A. 同文档：消息片段与聊天页片段共享 document');
+{
+  const fake = createFakeTavo(catalog);
+  const window = makeWindow(fake, createBroadcastChannelFactory());
+  injectBody(window, 'ui/message.html');
+  injectBody(window, 'ui/panel.html');
+  loadFragmentScripts(window, 'ui/message.html');
+  loadFragmentScripts(window, 'ui/panel.html');
+  await tick(20);
+
+  const api = window.__dialogTune__;
+  assert(!!api, '核心脚本已加载');
+  assert(api.isHost() === true, '聊天页片段认领了面板宿主');
+
+  const btn = window.document.querySelector('[data-dt-action="tune"]');
+  assert(!!btn, '行内微调按钮已渲染');
+  assert(window.document.querySelector('#dt-message-root').hidden === false, '按钮所在容器可见');
+
+  btn.click();
+  await tick(30);
+  const sheet = window.document.querySelector('.dt-sheet-root');
+  assert(!!sheet && !sheet.hidden, '点击后弹出面板');
+  assert(
+    sheet && sheet.parentNode === window.document.body,
+    '面板挂在页面 body 下（fixed 相对视口，不会被气泡容器限制）'
+  );
+  assert(
+    window.document.querySelector('.dt-sheet__subtitle').textContent.includes('角色'),
+    '面板目标正确指向角色消息'
+  );
+}
+
+/* ================= B. 跨文档 ================= */
+console.log('\nB. 跨文档：消息片段在另一个 document（模拟 iframe）');
+{
+  const fake = createFakeTavo(catalog);
+  const BC = createBroadcastChannelFactory();
+  const hostWindow = makeWindow(fake, BC);
+  injectBody(hostWindow, 'ui/panel.html');
+  loadFragmentScripts(hostWindow, 'ui/panel.html');
+  await tick(20);
+
+  const messageWindow = makeWindow(fake, BC);
+  injectBody(messageWindow, 'ui/message.html');
+  loadFragmentScripts(messageWindow, 'ui/message.html');
+  await tick(20);
+
+  const hostApi = hostWindow.__dialogTune__;
+  const messageApi = messageWindow.__dialogTune__;
+  assert(hostApi.isHost() === true, '聊天页侧是宿主');
+  assert(messageApi.isHost() === false, '消息侧不是宿主');
+
+  const btn = messageWindow.document.querySelector('[data-dt-action="tune"]');
+  assert(!!btn, '消息侧行内按钮已渲染');
+  btn.click();
+  await tick(60);
+
+  assert(
+    fake.store.variables['chat:dialog_tune_request'],
+    '请求已写入聊天作用域信箱'
+  );
+  await tick(500);
+
+  const hostSheet = hostWindow.document.querySelector('.dt-sheet-root');
+  assert(!!hostSheet && !hostSheet.hidden, '宿主侧弹出了面板');
+  assert(
+    hostSheet && hostSheet.parentNode === hostWindow.document.body,
+    '面板由宿主文档承载，位置不受消息侧容器影响'
+  );
+  assert(
+    messageWindow.document.querySelector('.dt-sheet-root').hidden,
+    '消息侧没有就地渲染面板'
+  );
+}
+
+/* ================= C. action bar / 输入框 + 菜单 ================= */
+console.log('\nC. entry 的两个原生入口');
+{
+  const fake = createFakeTavo(catalog);
+  const window = makeWindow(fake, createBroadcastChannelFactory());
+  injectBody(window, 'ui/panel.html');
+  loadFragmentScripts(window, 'ui/panel.html');
+  await tick(20);
+
+  /* entry.js 用插件事件总线通知面板 */
+  const api = window.__dialogTune__;
+  fake.store.draft = '我今天有点累';
+  await api.open({ kind: 'input' });
+  await tick(20);
+  assert(
+    window.document.querySelector('.dt-sheet-root') &&
+      !window.document.querySelector('.dt-sheet-root').hidden,
+    '通过插件事件总线可以打开面板（action bar / + 菜单走这条路）'
+  );
+}
+
+/* ================= D. 没有宿主时的降级 ================= */
+console.log('\nD. 没有宿主：降级为就地展开，保证点击一定有反应');
+{
+  const fake = createFakeTavo(catalog);
+  const messageWindow = makeWindow(fake, createBroadcastChannelFactory());
+  injectBody(messageWindow, 'ui/message.html');
+  loadFragmentScripts(messageWindow, 'ui/message.html');
+  await tick(20);
+
+  const btn = messageWindow.document.querySelector('[data-dt-action="tune"]');
+  btn.click();
+  await tick(60);
+  assert(
+    messageWindow.document.querySelector('.dt-sheet-root').hidden,
+    '刚点击时先等待宿主响应'
+  );
+
+  await tick(400);
+  const sheet = messageWindow.document.querySelector('.dt-sheet-root');
+  assert(sheet && !sheet.hidden, '宿主缺席时本地兜底打开面板');
+  assert(
+    sheet && sheet.classList.contains('dt-sheet-root--inline'),
+    '兜底模式为就地展开（iframe 会随内容变高，而不是裁成一条）'
+  );
+  const anchor = messageWindow.document.querySelector('#dt-message-root');
+  assert(
+    sheet && sheet.parentNode === anchor,
+    '兜底面板插入在触发它的消息下方'
+  );
+}
+
+console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
+process.exit(failures === 0 ? 0 : 1);

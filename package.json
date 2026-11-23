@@ -8,10 +8,12 @@
     "icons": "node scripts/make-icons.mjs",
     "build": "node scripts/make-icons.mjs && node scripts/build.mjs",
     "check": "node scripts/check.mjs",
-    "test": "node scripts/test-core.mjs",
+    "test": "node scripts/test-core.mjs && node scripts/test-fragments.mjs",
     "verify": "npm run check && npm test",
     "build:minimal": "node scripts/build-minimal.mjs",
-    "build:all": "npm run build && npm run build:minimal"
+    "build:all": "npm run build && npm run build:minimal",
+    "test:core": "node scripts/test-core.mjs",
+    "test:fragments": "node scripts/test-fragments.mjs"
   },
   "keywords": [
     "tavo",

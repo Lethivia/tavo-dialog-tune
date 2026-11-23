@@ -843,11 +843,15 @@
    * 面板：打开与关闭
    * ======================================================= */
 
-  function openSheet(target) {
+  function openSheet(target, options) {
     var conf = settings();
     if (!conf.enabled) return;
 
     if (!state.dom) buildSheet();
+    /* inline：在当前上下文内以普通文档流展开（宿主不可用时的降级） */
+    if (state.dom) {
+      state.dom.root.classList.toggle('dt-sheet-root--inline', !!(options && options.inline));
+    }
     state.lastFocused = document.activeElement;
 
     return loadPrefs()
@@ -915,6 +919,10 @@
     if (!state.dom) return;
     state.dom.root.hidden = true;
     state.dom.root.classList.remove('is-open');
+    state.dom.root.classList.remove('dt-sheet-root--inline');
+    if (state.dom.root.parentNode && state.dom.root.parentNode !== document.body) {
+      document.body.appendChild(state.dom.root);
+    }
     state.model = null;
     if (state.lastFocused && typeof state.lastFocused.focus === 'function') {
       try {
@@ -1131,6 +1139,19 @@
    * ======================================================= */
 
   var REQUEST_KEY = 'dialog_tune_request';
+  var CHANNEL_NAME = 'dialog-tune';
+
+  /* 同源广播：这是唯一能跨「兄弟 iframe」的通道
+   * （/messages 与 /chat 是并列的插件 iframe，postMessage 只往祖先走） */
+  var channel = null;
+  try {
+    channel = new BroadcastChannel(CHANNEL_NAME);
+  } catch (e) {
+    channel = null;
+  }
+
+  /** 待本地兜底处理的请求 */
+  var pendingRequest = null;
 
   /** 认领面板宿主（由聊天页片段调用） */
   function claimHost() {
@@ -1146,6 +1167,7 @@
     if (!request || !request.id) return;
     if (state.lastRequestId === request.id) return;
     state.lastRequestId = request.id;
+    pendingRequest = null;
     openSheet({
       kind: request.kind,
       messageId: request.messageId || null,
@@ -1153,11 +1175,43 @@
     });
   }
 
+  /** 回执：告诉发起方「已有人接手」，让它不要再本地兜底打开 */
+  function acknowledge(request, source) {
+    if (!request || !request.id) return;
+    if (channel) {
+      try {
+        channel.postMessage({ type: 'ack', id: request.id });
+      } catch (e) {
+        /* 忽略 */
+      }
+    }
+    try {
+      if (source && source.postMessage) {
+        source.postMessage({ __dialogTune: 'ack', id: request.id }, '*');
+      } else if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ __dialogTune: 'ack', id: request.id }, '*');
+      }
+    } catch (e) {
+      /* 忽略 */
+    }
+  }
+
+  /** 非宿主收到广播时，继续往上级窗口转发，层层上抛直到找到宿主 */
+  function forwardUpward(request, source) {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ __dialogTune: 'open', request: request }, '*');
+      }
+    } catch (e) {
+      /* 忽略 */
+    }
+  }
+
   /**
    * 打开微调面板。本文档是宿主时直接打开；
    * 否则把请求转发给宿主（同文档 DOM 事件 → 上级窗口 postMessage → 聊天作用域信箱）。
    */
-  function requestOpen(target) {
+  function requestOpen(target, anchor) {
     if (!settings().enabled) return;
     if (state.isHost) {
       openSheet(target);
@@ -1171,7 +1225,19 @@
       role: target.role || null
     };
 
-    /* 1) 同一文档 */
+    /* 先登记待兜底的请求：广播是同步投递的，回执可能先于下面的赋值到达 */
+    pendingRequest = { id: request.id, target: target, anchor: anchor || null };
+
+    /* 1) 同源广播：跨兄弟 iframe 的可靠通道 */
+    if (channel) {
+      try {
+        channel.postMessage({ type: 'open', request: request });
+      } catch (e) {
+        /* 忽略 */
+      }
+    }
+
+    /* 2) 同一文档 */
     try {
       document.dispatchEvent(
         new CustomEvent('dialog-tune-request', { detail: request, bubbles: true })
@@ -1180,7 +1246,7 @@
       /* 忽略 */
     }
 
-    /* 2) 上级窗口（跨 iframe） */
+    /* 3) 上级窗口（跨 iframe，宿主可能是祖先） */
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ __dialogTune: 'open', request: request }, '*');
@@ -1189,23 +1255,64 @@
       /* 忽略 */
     }
 
-    /* 3) 聊天作用域信箱 */
+    /* 4) 聊天作用域信箱 */
     tavo.variable
       .set(REQUEST_KEY, request, 'chat')
       .catch(function () {});
 
-    /* 4) 兜底：700ms 内没人接手（例如聊天页片段未挂载），就地打开 */
+    /* 5) 兜底：350ms 内没人接手，就地打开，保证点击一定有反应 */
     setTimeout(function () {
-      tavo.variable
-        .get(REQUEST_KEY, 'chat')
-        .then(function (value) {
-          if (value && value.id === request.id) {
-            openSheet(target);
-          }
-        })
-        .catch(function () {});
-    }, 700);
+      if (!pendingRequest || pendingRequest.id !== request.id) return;
+      var fallback = pendingRequest;
+      pendingRequest = null;
+      if (fallback.anchor && fallback.anchor.appendChild) {
+        /* 就地展开：把面板挪到触发它的位置，正常文档流里展开 */
+        try {
+          fallback.anchor.appendChild(state.dom.root);
+        } catch (e) {
+          /* 忽略 */
+        }
+      }
+      openSheet(fallback.target, { inline: true });
+    }, 350);
   }
+
+  /* 监听同源广播：宿主接手并回执；非宿主继续上抛 */
+  if (channel) {
+    channel.addEventListener('message', function (event) {
+      var data = event && event.data;
+      if (!data) return;
+      if (data.type === 'open' && data.request) {
+        if (state.isHost) {
+          handleRequest(data.request);
+          acknowledge(data.request);
+        } else {
+          forwardUpward(data.request);
+        }
+      } else if (data.type === 'ack') {
+        /* 有人接手了，本地兜底不必再打开 */
+        pendingRequest = null;
+      }
+    });
+  }
+
+  /* 监听来自祖先窗口的回执与请求 */
+  window.addEventListener('message', function (event) {
+    var data = event && event.data;
+    if (!data) return;
+    if (data.__dialogTune === 'ack') {
+      pendingRequest = null;
+      return;
+    }
+    if (data.__dialogTune === 'open' && data.request) {
+      if (state.isHost) {
+        handleRequest(data.request);
+        acknowledge(data.request, event.source);
+      } else {
+        forwardUpward(data.request, event.source);
+      }
+    }
+  });
 
   /* =========================================================
    * 对外接口

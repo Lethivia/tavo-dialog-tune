@@ -33,11 +33,14 @@
     btn.addEventListener('click', function (event) {
       event.preventDefault();
       event.stopPropagation();
-      api.requestOpen({
-        kind: 'message',
-        messageId: message.id,
-        role: message.role
-      });
+      api.requestOpen(
+        {
+          kind: 'message',
+          messageId: message.id,
+          role: message.role
+        },
+        root
+      );
     });
   }
 

@@ -2,11 +2,11 @@
   "specVersion": 2,
   "id": "io.github.dialogtune.dialog-tune",
   "name": { "$t": "plugin.name" },
-  "version": "1.0.2",
+  "version": "1.0.3",
   "entry": "entry.js",
   "author": "Dialog Tune",
   "description": { "$t": "plugin.description" },
-  "releaseNotes": { "$t": "releaseNotes.1_0_2" },
+  "releaseNotes": { "$t": "releaseNotes.1_0_3" },
   "localization": {
     "defaultLocale": "zh-CN",
     "resources": {

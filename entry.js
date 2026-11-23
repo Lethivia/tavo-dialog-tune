@@ -21,22 +21,22 @@
     /* 旧版本没有事件总线时降级为不可用提示 */
   }
 
-  /** 面板是否可用：事件标记，或直接探测文档里已挂载的面板 */
-  function panelAvailable() {
-    if (panelReady) return true;
-    try {
-      return typeof document !== 'undefined' && !!document.querySelector('.dt-sheet-root');
-    } catch (e) {
-      return false;
-    }
-  }
-
+  /**
+   * 面板由聊天页片段承载，而片段跑在独立 iframe 里，
+   * 入口这边无法可靠探测它是否就绪——所以不再做前置判断，
+   * 直接发事件，由宿主回执；800ms 内没有回执才给出明确提示。
+   */
   function open(payload) {
-    if (!panelAvailable()) {
-      tavo.utils.toast(i18n.t('runtime.panelUnavailable'));
-      return;
-    }
+    var acknowledged = false;
+    var unsubscribe = tavo.plugin.on('dialog-tune-opened', function () {
+      acknowledged = true;
+      if (typeof unsubscribe === 'function') unsubscribe();
+    });
     tavo.plugin.emit('dialog-tune-open', payload);
+    setTimeout(function () {
+      if (acknowledged) return;
+      tavo.utils.toast(i18n.t('runtime.panelUnavailable'));
+    }, 800);
   }
 
   /* 输入框「+」菜单 */

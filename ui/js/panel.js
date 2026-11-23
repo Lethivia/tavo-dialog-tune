@@ -33,6 +33,12 @@
     } else {
       api.open({ kind: 'input' });
     }
+    /* 回执给入口，让它知道面板确实打开了 */
+    try {
+      tavo.plugin.emit('dialog-tune-opened', {});
+    } catch (e) {
+      /* 忽略 */
+    }
   });
 
   /* ---- 同一文档内的请求 ---- */
