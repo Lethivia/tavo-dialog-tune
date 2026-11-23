@@ -14,21 +14,14 @@
       "zh-CN": "locales/zh-CN.json"
     }
   },
-  "cover": "icons/cover.png",
+  "cover": "cover.png",
   "minAppVersion": "0.93.0",
   "permissions": ["generate", "message", "input", "variable"],
   "contributes": {
-    "visible": {
-      "inputActions": true,
-      "lastMessageActions": true,
-      "chat": true,
-      "messages": true
-    },
     "inputActions": [
       {
         "id": "dialog-tune",
-        "label": { "$t": "actions.dialogTune" },
-        "icon": "icons/tune.png"
+        "label": { "$t": "actions.dialogTune" }
       }
     ],
     "lastMessageActions": [

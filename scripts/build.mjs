@@ -15,7 +15,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = resolve(ROOT, 'dist');
 
 /** 参与打包的路径（其余一律排除） */
-const INCLUDE = ['manifest.json', 'entry.js', 'ui', 'locales', 'icons'];
+const INCLUDE = ['manifest.json', 'entry.js', 'ui', 'locales', 'icons', 'cover.png'];
 const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', '.idea', '.vscode']);
 
 const CRC_TABLE = (() => {

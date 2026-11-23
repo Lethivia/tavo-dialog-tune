@@ -45,15 +45,29 @@ AI 的回复经常「差一点点」：语气太硬、结尾太啰嗦、人称�
 
 ### 导入失败排查
 
-Tavo 1.12、specVersion 2 与插件包国际化都没有问题。导入报「文件格式不对或是不支持的格式」时，按顺序排查：
+Tavo 1.12 支持 specVersion 2、插件包国际化与消息候选版本，版本门槛不是原因。
 
-1. **先换扩展名**：包同时提供 `.tpg` 与 `.zip` 两份内容相同的文件。移动端文件选择器对 `.tpg` 的 MIME 识别不稳定（常被识别成 `application/octet-stream` 而被过滤掉），官方开发指南的导入流程本身用的也是 `.zip`。优先导入 `.zip`。
-2. **再试最小包**：`dist/dialog-tune-minimal-1.0.0.zip` 是一个只有 `manifest.json` + `entry.js` 的空壳插件。
-   - 最小包也装不上 → 问题在文件传输/文件选择器这一层，与本插件的清单无关；
+已与两个**已上架的社区插件包**（`com.emon.image-viewer`、`com.jeremy.tavo-memory-curator`）逐项比对：
+
+| 比对项 | 结论 |
+| --- | --- |
+| ZIP 头部 | 与参考包同为 Info-ZIP / Unix / deflate，`manifest.json` 位于偏移 0 |
+| 包结构 | `manifest.json` + `entry.js` + `ui/` + `locales/` + 根目录图片，与参考包一致 |
+| manifest 字段 | specVersion / id / name / version / entry / author / description / releaseNotes / localization / cover / permissions / contributes 的用法与参考包一致 |
+| 图片格式 | 封面 512×512 PNG、动作图标 128×128 PNG，均经独立解码器（PIL）验证可正常解码 |
+| 文案 | 中英双语的 88 条文案全部进 catalog，key 齐全 |
+
+据此已消除的偏差：封面改为根目录 512×512 PNG、去掉 `contributes.visible`（默认本就是全开）、去掉输入动作图标。
+
+若仍导入失败，按顺序排查：
+
+1. **先换扩展名**：包同时提供 `.tpg` 与 `.zip` 两份内容相同的文件。移动端文件选择器对 `.tpg` 的 MIME 识别不稳定（常被归为 `application/octet-stream` 而被过滤），官方开发指南的导入流程本身用的也是 `.zip`。优先导入 `.zip`。
+2. **再试最小包**：`dist/dialog-tune-minimal-1.0.0.zip` 只有 `manifest.json` + `entry.js`。
+   - 最小包也装不上 → 问题在文件传输 / 文件选择器这一层，与本插件清单无关；
    - 最小包装得上 → 问题在完整清单的某个字段，可逐项加回定位。
-3. **看 App 的具体拒绝理由**：Tavo 会在写入前拒绝不合规的包，常见原因是根目录没有 `manifest.json`、`manifest.json` 不是合法 JSON、包里有绝对路径或 `../`、`entry` 指向的文件不存在、使用了当前版本不支持的字段或 `specVersion`。
+3. **把 App 的原文报错发过来**：Tavo 拒绝插件时区分「缺 manifest / JSON 非法 / 路径不安全 / entry 不存在 / 字段不支持 / specVersion 不支持」多类，现在这句太泛，看不出落在哪一类。
 
-排查用的产物由 `npm run build` 与 `npm run build:minimal` 生成。
+排查产物由 `npm run build` 与 `npm run build:minimal` 生成；`npm run check` 会校验 manifest、图片格式与文案 key。
 
 ### 从源码构建
 

@@ -143,7 +143,60 @@ for (const file of ['ui/panel.html', 'ui/message.html']) {
   }
 }
 
-/* ---------------- 6. 文案长度上限 ---------------- */
+/* ---------------- 6. 图片资源格式 ---------------- */
+
+/** 读取 PNG 尺寸；不是 PNG 返回 null */
+function pngSize(path) {
+  const buffer = readFileSync(path);
+  const isPng =
+    buffer.length > 24 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47;
+  if (!isPng) return null;
+  return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+function isWebp(path) {
+  const buffer = readFileSync(path);
+  return (
+    buffer.length > 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP'
+  );
+}
+
+function checkImage(path, label) {
+  if (!existsSync(path)) {
+    fail(`${label} 不存在：${path}`);
+    return;
+  }
+  const size = pngSize(path);
+  if (size) {
+    if (size.width > 512 || size.height > 512) {
+      fail(`${label} 尺寸超过 512×512：${size.width}×${size.height}`);
+    }
+    if (size.width !== size.height) {
+      notes.push(`${label} 不是正方形（${size.width}×${size.height}），官方插件中心的封面为 512×512`);
+    }
+    return;
+  }
+  if (isWebp(path)) return;
+  fail(`${label} 不是合法的 PNG/WebP（插件动作图标只接受这两种格式）：${path}`);
+}
+
+if (manifest.cover) {
+  checkImage(resolve(ROOT, manifest.cover), '封面');
+}
+for (const action of [
+  ...(manifest.contributes?.inputActions || []),
+  ...(manifest.contributes?.lastMessageActions || [])
+]) {
+  if (action.icon) checkImage(resolve(ROOT, action.icon), `动作「${action.id}」图标`);
+}
+
+/* ---------------- 7. 文案长度上限 ---------------- */
 
 function measure(value) {
   return [...String(value)].length;

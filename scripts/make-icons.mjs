@@ -196,8 +196,8 @@ function buildActionIcon() {
 }
 
 function buildCover() {
-  const width = 960;
-  const height = 540;
+  const width = 512;
+  const height = 512;
   const canvas = new Canvas(width, height);
 
   // 背景渐变
@@ -232,21 +232,19 @@ function buildCover() {
     }
   }
 
-  // 主图形
+  // 主图形：居中的滑杆
   const rows = [
     { y: 30, knob: 78, from: 14, to: 114 },
     { y: 64, knob: 46, from: 14, to: 114 },
     { y: 98, knob: 90, from: 14, to: 114 },
   ];
-  drawSliders(canvas, rows, [255, 255, 255], 1.6, 120, 150, 0.9);
-
-  // 文字
-  drawText(canvas, 'Dialog Tune', 124, 372, 9, [255, 255, 255]);
+  drawSliders(canvas, rows, [255, 255, 255], 2.4, 116, 140, 0.95);
 
   return encodePng(width, height, canvas.data);
 }
 
 mkdirSync(resolve(ROOT, 'icons'), { recursive: true });
 writeFileSync(resolve(ROOT, 'icons/tune.png'), buildActionIcon());
-writeFileSync(resolve(ROOT, 'icons/cover.png'), buildCover());
-console.log('icons/tune.png 与 icons/cover.png 已生成');
+/* 封面放在包根目录，形状对齐官方插件中心已上架的包（512x512 PNG） */
+writeFileSync(resolve(ROOT, 'cover.png'), buildCover());
+console.log('icons/tune.png 与 cover.png 已生成');
