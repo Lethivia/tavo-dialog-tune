@@ -13,7 +13,9 @@
     "build:minimal": "node scripts/build-minimal.mjs",
     "build:all": "npm run build && npm run build:minimal",
     "test:core": "node scripts/test-core.mjs",
-    "test:fragments": "node scripts/test-fragments.mjs"
+    "test:fragments": "node scripts/test-fragments.mjs",
+    "bench": "node scripts/bench-diff.mjs",
+    "diff-demo": "node scripts/diff-demo.mjs"
   },
   "keywords": [
     "tavo",

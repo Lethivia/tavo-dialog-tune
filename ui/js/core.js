@@ -344,7 +344,7 @@
    * 词元级最长公共子序列差异。
    * 返回 [{type:'equal'|'add'|'del', text}]
    */
-  function diffTokens(a, b) {
+  function diffTokens(a, b, merge) {
     var n = a.length;
     var m = b.length;
     var width = m + 1;
@@ -363,7 +363,12 @@
     var x = 0;
     var y = 0;
     function push(type, text) {
+      /* merge 为 false 时不合并同类相邻段：单位级对齐需要逐个单位来配对 */
       var last = segments[segments.length - 1];
+      if (merge === false) {
+        segments.push({ type: type, text: text });
+        return;
+      }
       if (last && last.type === type) last.text += text;
       else segments.push({ type: type, text: text });
     }
@@ -387,8 +392,12 @@
     return segments;
   }
 
-  /** 局部细化的上限：超过就整块标记，不再逐字算 */
-  var REFINE_LIMIT = 4000;
+  /** 单位级对齐的规模上限：超过就整块处理，避免大内存 */
+  var UNIT_DIFF_LIMIT = 4000000;
+  /** 单对单位的逐字细化上限：超过就整块标记 */
+  var REFINE_LIMIT = 2000;
+  /** 逐字细化的总预算：超出后改为按单位整体标记，避免生成过多 DOM 节点 */
+  var SEGMENT_BUDGET = 600;
 
   /** 保留换行的按行切分 */
   function splitLines(text) {
@@ -401,9 +410,30 @@
   }
 
   /**
-   * 把「删掉的片段」和「新增的片段」逐字对齐，得到更细的差异。
+   * 切分「对齐单位」：多行文本按行，单行文本按标点/词切分。
+   * 这样即使整条消息只有一行，也能按句对齐，而不是整段一起替换。
    */
-  function pushRefined(segments, delText, addText) {
+  function splitUnits(text) {
+    var str = String(text || '');
+    if (!str) return [];
+    if (str.indexOf('\n') >= 0) return splitLines(str);
+    var units = str.match(/[^，。！？；：、,.!?;:\s]+[，。！？；：、,.!?;:\s]*/g);
+    if (units && units.length >= 8) return units;
+    /* 没有标点的长文本：按固定长度切块，至少能定位到块级别 */
+    if (str.length > REFINE_LIMIT * 2) {
+      var chunks = [];
+      for (var i = 0; i < str.length; i += REFINE_LIMIT) {
+        chunks.push(str.slice(i, i + REFINE_LIMIT));
+      }
+      return chunks;
+    }
+    return units && units.length ? units : [str];
+  }
+
+  /**
+   * 把「删掉的单位」和「新增的单位」逐字对齐，得到更细的差异。
+   */
+  function pushRefinedPair(segments, delText, addText, budget) {
     if (!delText) {
       if (addText) segments.push({ type: 'add', text: addText });
       return;
@@ -412,27 +442,41 @@
       segments.push({ type: 'del', text: delText });
       return;
     }
-    if (delText.length > REFINE_LIMIT || addText.length > REFINE_LIMIT) {
+    /* 预算用尽或片段过长：整块标记（改动很大时逐字意义不大） */
+    if (budget.remaining <= 0 || delText.length > REFINE_LIMIT || addText.length > REFINE_LIMIT) {
       segments.push({ type: 'del', text: delText });
       segments.push({ type: 'add', text: addText });
       return;
     }
     var refined = diffTokens(tokenize(delText), tokenize(addText));
+    budget.remaining -= refined.length;
     for (var i = 0; i < refined.length; i++) segments.push(refined[i]);
   }
 
   /**
-   * 差异分段：先按行对齐（便宜，长文本也不吃内存），
-   * 再对「被替换的行」做逐字细化。
-   * 不设长度上限——任何长度的文本都能标出差异。
+   * 差异分段：先按「单位」（行或句）做 LCS 对齐——这一步很便宜，
+   * 长文本也不吃内存；再对被替换的单位逐字细化。
+   * 没有长度上限：任何长度的文本都能定位到改动所在。
    */
   function buildDiff(original, tuned) {
     var oText = String(original || '');
     var tText = String(tuned || '');
     if (oText === tText) return [];
 
-    var ops = diffTokens(splitLines(oText), splitLines(tText));
+    var oUnits = splitUnits(oText);
+    var tUnits = splitUnits(tText);
+
+    /* 规模太大时不做对齐，直接整块标记（改动本来就很大） */
+    if (oUnits.length * tUnits.length > UNIT_DIFF_LIMIT) {
+      return [
+        { type: 'del', text: oText },
+        { type: 'add', text: tText }
+      ];
+    }
+
+    var ops = diffTokens(oUnits, tUnits, false);
     var segments = [];
+    var budget = { remaining: SEGMENT_BUDGET };
     var i = 0;
     while (i < ops.length) {
       if (ops[i].type === 'equal') {
@@ -447,9 +491,36 @@
         else adds.push(ops[i].text);
         i++;
       }
-      pushRefined(segments, dels.join(''), adds.join(''));
+      var pairs = Math.min(dels.length, adds.length);
+      /* 预算用尽后剩下的单位合并成整块，避免节点数失控 */
+      var tailDel = '';
+      var tailAdd = '';
+      for (var k = 0; k < pairs; k++) {
+        if (budget.remaining <= 0) {
+          tailDel += dels[k];
+          tailAdd += adds[k];
+          continue;
+        }
+        pushRefinedPair(segments, dels[k], adds[k], budget);
+      }
+      for (var k2 = pairs; k2 < dels.length; k2++) tailDel += dels[k2];
+      for (var k3 = pairs; k3 < adds.length; k3++) tailAdd += adds[k3];
+      if (tailDel) segments.push({ type: 'del', text: tailDel });
+      if (tailAdd) segments.push({ type: 'add', text: tailAdd });
     }
-    return segments;
+    /* 合并相邻同类段：视觉上一样，但 DOM 节点少一个数量级 */
+    return mergeSegments(segments);
+  }
+
+  /** 合并相邻同类段 */
+  function mergeSegments(segments) {
+    var merged = [];
+    for (var i = 0; i < segments.length; i++) {
+      var last = merged[merged.length - 1];
+      if (last && last.type === segments[i].type) last.text += segments[i].text;
+      else merged.push({ type: segments[i].type, text: segments[i].text });
+    }
+    return merged;
   }
 
   /** 差异统计：新增与删除了多少字 */

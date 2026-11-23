@@ -442,9 +442,9 @@ console.log('\n18. 差异算法的精确行为');
     '英文：按词对齐（不切开单词内部）',
     show('Hello world', 'Hello there')
   );
+  /* 相邻同类段会被合并，所以是「第一行\n第二行」一段 + 新增「改」 */
   const expectedMultiline = [
-    { type: 'equal', text: '第一行\n' },
-    { type: 'equal', text: '第二行' },
+    { type: 'equal', text: '第一行\n第二行' },
     { type: 'add', text: '改' }
   ];
   assert(
