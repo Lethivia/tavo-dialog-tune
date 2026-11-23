@@ -1,0 +1,142 @@
+/**
+ * 打包 Tavo 插件为 .tpg（本质是 zip，manifest.json 必须位于包根目录）
+ *
+ * 零依赖：内置最小 ZIP 写入器（deflate + CRC32）。
+ * 用法：node scripts/build.mjs
+ */
+import zlib from 'node:zlib';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { dirname, resolve, relative, sep, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const DIST = resolve(ROOT, 'dist');
+
+/** 参与打包的路径（其余一律排除） */
+const INCLUDE = ['manifest.json', 'entry.js', 'ui', 'locales', 'icons'];
+const EXCLUDE_DIRS = new Set(['node_modules', '.git', 'dist', '.idea', '.vscode']);
+
+const CRC_TABLE = (() => {
+  const table = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c;
+  }
+  return table;
+})();
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function walk(dir, base = dir, out = []) {
+  for (const name of readdirSync(dir).sort()) {
+    if (EXCLUDE_DIRS.has(name)) continue;
+    const full = join(dir, name);
+    const stats = statSync(full);
+    if (stats.isDirectory()) walk(full, base, out);
+    else out.push(full);
+  }
+  return out;
+}
+
+function dosDateTime(date) {
+  const time = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | ((date.getSeconds() / 2) & 0x1f);
+  const day = (((date.getFullYear() - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0x0f) << 5) | (date.getDate() & 0x1f);
+  return { time, day };
+}
+
+function buildZip(files) {
+  const locals = [];
+  const central = [];
+  let offset = 0;
+  const stamp = dosDateTime(new Date());
+
+  for (const file of files) {
+    const name = relative(ROOT, file).split(sep).join('/');
+    const raw = readFileSync(file);
+    const deflated = zlib.deflateRawSync(raw, { level: 9 });
+    const useDeflate = deflated.length < raw.length;
+    const data = useDeflate ? deflated : raw;
+    const method = useDeflate ? 8 : 0;
+    const nameBuf = Buffer.from(name, 'utf8');
+    const crc = crc32(raw);
+
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6); // UTF-8 文件名
+    local.writeUInt16LE(method, 8);
+    local.writeUInt16LE(stamp.time, 10);
+    local.writeUInt16LE(stamp.day, 12);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(raw.length, 22);
+    local.writeUInt16LE(nameBuf.length, 26);
+    local.writeUInt16LE(0, 28);
+    locals.push(local, nameBuf, data);
+
+    const entry = Buffer.alloc(46);
+    entry.writeUInt32LE(0x02014b50, 0);
+    entry.writeUInt16LE(20, 4);
+    entry.writeUInt16LE(20, 6);
+    entry.writeUInt16LE(0x0800, 8);
+    entry.writeUInt16LE(method, 10);
+    entry.writeUInt16LE(stamp.time, 12);
+    entry.writeUInt16LE(stamp.day, 14);
+    entry.writeUInt32LE(crc, 16);
+    entry.writeUInt32LE(data.length, 20);
+    entry.writeUInt32LE(raw.length, 24);
+    entry.writeUInt16LE(nameBuf.length, 28);
+    entry.writeUInt16LE(0, 30);
+    entry.writeUInt16LE(0, 32);
+    entry.writeUInt16LE(0, 34);
+    entry.writeUInt16LE(0, 36);
+    entry.writeUInt32LE(0, 38);
+    entry.writeUInt32LE(offset, 42);
+    central.push(entry, nameBuf);
+
+    offset += local.length + nameBuf.length + data.length;
+  }
+
+  const centralBuf = Buffer.concat(central);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(0, 4);
+  end.writeUInt16LE(0, 6);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(centralBuf.length, 12);
+  end.writeUInt32LE(offset, 16);
+  end.writeUInt16LE(0, 20);
+
+  return Buffer.concat([...locals, centralBuf, end]);
+}
+
+const manifest = JSON.parse(readFileSync(resolve(ROOT, 'manifest.json'), 'utf8'));
+const files = [];
+for (const item of INCLUDE) {
+  const full = resolve(ROOT, item);
+  let stats;
+  try {
+    stats = statSync(full);
+  } catch {
+    throw new Error(`缺少打包文件：${item}`);
+  }
+  if (stats.isDirectory()) walk(full, ROOT, files);
+  else files.push(full);
+}
+
+if (!files.some((f) => f.endsWith('manifest.json'))) {
+  throw new Error('manifest.json 必须位于插件包根目录');
+}
+
+mkdirSync(DIST, { recursive: true });
+const outFile = resolve(DIST, `${manifest.id}-${manifest.version}.tpg`);
+writeFileSync(outFile, buildZip(files));
+
+console.log(`已打包 ${files.length} 个文件 → ${relative(ROOT, outFile)}`);
+for (const file of files) console.log('  -', relative(ROOT, file));
