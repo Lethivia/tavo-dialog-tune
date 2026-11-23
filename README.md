@@ -166,36 +166,37 @@ Tavo 原生的长按气泡菜单（复制 / 改写 / 回溯 / 删除 / 隐藏 / 
 - 已知模型族直接给**开关 / 档位**；不认识的型号选「其它」后可以**手填 HTTP body**（例如 `{"reasoning_effort": "low"}`）。
 - 各家「关闭思考」的语义不统一（`disabled` / `none` / `minimal` / 省略参数），**强制思考的型号不提供关闭档**（官方说明传 `disabled` 会 400）。
 
-### 各模型族的参数（按官方文档逐条核对）
+### 各模型族的参数
 
-| 模型族 | 请求字段 | 档位 | 官方文档 |
+⚠️ **关键**：`settings` 里的键是 **Tavo 内部的模型参数 id**（形如 `openai.reasoning_effort`、`claude_thinking.budget_tokens`、`gemini_thinking_level`），原生层会查表翻译成各平台的字段。**直接写平台字段（`{"reasoning_effort":"low"}`）不保证生效**；文本生成路径也没有 `extraBody`（那是生图接口才有的）。
+
+| 模型族 | Tavo 参数 id | 档位 | 官方文档 |
 | --- | --- | --- | --- |
-| OpenAI 兼容 | `reasoning_effort` | none / minimal / low / medium / high / xhigh | [platform.openai.com](https://platform.openai.com/docs/guides/reasoning) |
-| DeepSeek | `thinking.type` + `reasoning_effort` | 关闭 / low / high / max | [api-docs.deepseek.com](https://api-docs.deepseek.com/guides/thinking_mode/) |
-| 智谱 GLM | `thinking.type` + `reasoning_effort`（5.3 强制思考） | low / high / max | [docs.bigmodel.cn](https://docs.bigmodel.cn/cn/guide/capabilities/thinking) |
-| 小米 MiMo | `thinking.type` | 开启 / 关闭 | [mimo.mi.com](https://mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md) |
-| Anthropic | `thinking.type:adaptive` + `output_config.effort` | low / medium / high / xhigh / max | [platform.claude.com](https://platform.claude.com/docs/en/build-with-claude/thinking) |
-| Google Gemini | `generationConfig.thinkingConfig.thinkingLevel` | minimal / low / medium / high / xhigh | [ai.google.dev](https://ai.google.dev/gemini-api/docs/thinking) |
-| xAI Grok | `reasoning_effort`（不可关） | low / medium / high / xhigh | [docs.x.ai](https://docs.x.ai/developers/model-capabilities/text/reasoning) |
-| Kimi K3 | `reasoning_effort`（不可关） | low / high / max | [platform.kimi.ai](https://platform.kimi.ai/docs/guide/use-reasoning-effort) |
-| 阿里 Qwen / 百炼 | `enable_thinking` + `reasoning_effort` | 关闭 / minimal / low / medium / high / xhigh | [alibabacloud.com](https://www.alibabacloud.com/help/en/model-studio/deep-thinking) |
+| OpenAI 兼容 | `openai.reasoning_effort` | none / minimal / low / medium / high / xhigh | [platform.openai.com](https://platform.openai.com/docs/guides/reasoning) |
+| OpenRouter | `openrouter.reasoning_effort` | low / medium / high / xhigh | [openrouter.ai](https://openrouter.ai/docs/use-cases/reasoning-tokens) |
+| DeepSeek | `deepseek.reasoning_effort` | low / high / max | [api-docs.deepseek.com](https://api-docs.deepseek.com/guides/thinking_mode/) |
+| 智谱 GLM | `zhipu.reasoning_effort`（5.3 强制思考） | low / high / max | [docs.bigmodel.cn](https://docs.bigmodel.cn/cn/guide/capabilities/thinking) |
+| Anthropic | `claude_thinking.budget_tokens` | 2048 / 8192 / 16384 | [platform.claude.com](https://platform.claude.com/docs/en/build-with-claude/thinking) |
+| Google Gemini | `gemini_thinking_level` | MINIMAL / LOW / MEDIUM / HIGH / XHIGH | [ai.google.dev](https://ai.google.dev/gemini-api/docs/thinking) |
+| 小米 MiMo / Grok / Kimi / Qwen | 原生参数表暂无对应 id → **只能手填** | — | [mimo](https://mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md) · [grok](https://docs.x.ai/developers/model-capabilities/text/reasoning) · [kimi](https://platform.kimi.ai/docs/guide/use-reasoning-effort) · [qwen](https://www.alibabacloud.com/help/en/model-studio/deep-thinking) |
 
-### ⚠️ 一个必须说清的限制
+各家「关闭思考」的语义不统一（`none` / `disabled` / `minimal` / 省略参数），**强制思考的型号不给关闭档**（官方说明传 `disabled` 会 400）。
 
-**文本生成的 `settings` 能不能透传任意字段，官方文档没有写死**：
+### ⚠️ 这个功能的确切状态
 
-- ✅ 文档明确：`tavo.generate(prompt, { settings })` 会「覆盖本次请求的模型参数」；
-- ✅ App 自己的「API 连接 → 参数设置」页明确支持「自定义配置…填写或调整各项参数值」；
-- ✅ 插件接口在**生图**上有明确的 `extraBody`（"透传到平台 API 的额外字段"）；
-- ⚠️ 但**文本生成**只列了 temperature / topP / maxCompletionTokens，且**已上架插件清一色只用这几个白名单键**——没人证明过额外键能透传。
+**能用，但官方没有把话说死。** 核实结论：
 
-所以插件做了三件兜底的事：
+- ✅ 文档明确 `tavo.generate(prompt, { settings })` 会「覆盖本次请求的模型参数」，原生层有统一的参数注册表（Tavo 参数 id → 平台字段的查表翻译）；
+- ✅ 这**正好满足**「只对微调生效、不改动用户 API 设置」——`settings` 是逐请求覆盖；
+- ⚠️ 但文档**从未说明** `settings` 的透传规则，**已上架插件清一色只用 temperature / maxCompletionTokens**（0/10 先例），原生 Dart 层是 AOT 编译无法逐行确认。
 
-1. 设置里可切换**参数放置位置**：`extraBody`（默认，与官方生图接口一致）/ 顶层（直接放在本次请求的模型参数里）；
-2. 手填 JSON 兜底，**填错 JSON 会被忽略而不是让请求失败**；
-3. 如果模型侧报错并疑似是「不认这个字段」，面板会给出**可操作的提示**（换放置位置或关掉思考模式），而不是一句干巴巴的失败。
+所以插件做了三层兜底：
 
-**请在你的设备上实测一次**：面板里选「OpenAI 兼容 + 低」→ 微调一次 → 看模型是否真的思考了（明显更慢或回复带推理痕迹）。**如果不生效**，把设置里的「参数放置位置」换成「顶层」再试；**两种都不通**的话，说明官方插件接口确实没开这个口子，我会据实说明并把该功能退回为提示。
+1. **参数 id 选对**（用 Tavo 内部 id，不写平台字段）；
+2. **手填 JSON**：可以填任意 Tavo 参数 id（例如 `{"claude_thinking.budget_tokens": 4096}`），**解析失败会被忽略而不是让请求失败**；
+3. **模型报错时给可操作提示**（"模型拒绝了思考参数……"），而不是一句干巴巴的失败。
+
+**请在设备上实测**：面板选「OpenAI 兼容 + 低」→ 微调一次 → 看模型是否真的思考了（明显更慢、或回复带推理痕迹）。**如果不生效**，把模型族换成手填 JSON 试试别的参数 id；**都不通**的话，我会据实说明这个口子没开，并把该功能退回成提示。
 
 ### 思考过程为什么显示不出来
 

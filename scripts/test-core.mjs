@@ -623,9 +623,8 @@ console.log('\n21. 思考模式');
   await tick(30);
   options = store.generated[store.generated.length - 1].options;
   assert(
-    options.settings && options.settings.extraBody &&
-      options.settings.extraBody.reasoning_effort === 'low',
-    '已知模型族按档位生成参数（OpenAI 兼容 → reasoning_effort）',
+    options.settings && options.settings['openai.reasoning_effort'] === 'low',
+    '已知模型族按档位生成 Tavo 参数 id（OpenAI 兼容 → openai.reasoning_effort）',
     JSON.stringify(options)
   );
 
@@ -637,7 +636,7 @@ console.log('\n21. 思考模式');
   await tick(10);
   const customArea = window.document.querySelector('.dt-textarea--mono');
   assert(!!customArea && !customArea.parentNode.hidden, '选「自定义 JSON」后出现手动输入框');
-  customArea.value = '{"reasoning_effort": "medium", "foo": 1}';
+  customArea.value = '{"openai.reasoning_effort": "medium", "gemini_thinking_level": "HIGH"}';
   customArea.dispatchEvent(new window.Event('input', { bubbles: true }));
   window.document.querySelector('.dt-textarea').value = '改一改';
   byText(window.document, '.dt-primary-btn', '生成微调').click();
@@ -645,10 +644,9 @@ console.log('\n21. 思考模式');
   options = store.generated[store.generated.length - 1].options;
   assert(
     options.settings &&
-      options.settings.extraBody &&
-      options.settings.extraBody.reasoning_effort === 'medium' &&
-      options.settings.extraBody.foo === 1,
-    '手动填的 JSON 原样进入请求',
+      options.settings['openai.reasoning_effort'] === 'medium' &&
+      options.settings['gemini_thinking_level'] === 'HIGH',
+    '手动填的 Tavo 参数 id 原样进入请求',
     JSON.stringify(options)
   );
 
@@ -666,7 +664,7 @@ console.log('\n21. 思考模式');
   await tick(30);
   options = store.generated[store.generated.length - 1].options;
   assert(store.generated.length > 0, '手写非法 JSON 时仍然正常发起请求');
-  assert(!options.settings || !options.settings.extraBody, '非法 JSON 被忽略，不会污染请求');
+  assert(!options.settings || Object.keys(options.settings).length === 0, '非法 JSON 被忽略，不会污染请求');
 }
 
 /* 22. 各模型族的档位必须按官方枚举给出 */
@@ -698,8 +696,8 @@ console.log('\n22. 各模型族的档位');
   familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
   await tick(10);
   assert(
-    JSON.stringify(levelsOf()) === JSON.stringify(['off', 'on']),
-    'MiMo 只有开/关两档（官方 Chat 端点无 reasoning_effort）',
+    levelsOf().length === 0,
+    'MiMo 在 Tavo 原生参数表里没有对应参数 id，只能手填',
     JSON.stringify(levelsOf())
   );
 
@@ -707,8 +705,8 @@ console.log('\n22. 各模型族的档位');
   familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
   await tick(10);
   assert(
-    JSON.stringify(levelsOf()) === JSON.stringify(['low', 'high', 'max']),
-    'Kimi K3 用顶层 reasoning_effort，且思考恒开（无关闭档）',
+    levelsOf().length === 0,
+    'Kimi 同样没有 Tavo 参数 id，只能手填',
     JSON.stringify(levelsOf())
   );
 
@@ -732,7 +730,7 @@ console.log('\n22. 各模型族的档位');
   familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
   await tick(10);
   assert(
-    levelsOf().includes(levelSelect().value),
+    levelsOf().includes(levelSelect().value) || levelSelect().value === 'custom',
     '切换模型族后档位仍合法',
     levelSelect().value
   );
@@ -745,12 +743,8 @@ console.log('\n22. 各模型族的档位');
   await tick(30);
   const options = store.generated[store.generated.length - 1].options;
   assert(
-    options.settings &&
-      options.settings.extraBody &&
-      options.settings.extraBody.thinking &&
-      options.settings.extraBody.thinking.type === 'enabled' &&
-      options.settings.extraBody.reasoning_effort === 'low',
-    'DeepSeek 发出 thinking + reasoning_effort 两项',
+    options.settings && options.settings['deepseek.reasoning_effort'] === 'low',
+    'DeepSeek 发出 deepseek.reasoning_effort 参数 id',
     JSON.stringify(options)
   );
 }
