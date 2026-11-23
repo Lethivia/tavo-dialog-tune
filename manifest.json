@@ -2,11 +2,11 @@
   "specVersion": 2,
   "id": "io.github.dialogtune.dialog-tune",
   "name": { "$t": "plugin.name" },
-  "version": "1.0.1",
+  "version": "1.0.2",
   "entry": "entry.js",
   "author": "Dialog Tune",
   "description": { "$t": "plugin.description" },
-  "releaseNotes": { "$t": "releaseNotes.1_0_1" },
+  "releaseNotes": { "$t": "releaseNotes.1_0_2" },
   "localization": {
     "defaultLocale": "zh-CN",
     "resources": {
@@ -69,18 +69,6 @@
           "label": { "$t": "settings.showInlineButton" },
           "default": true,
           "description": { "$t": "settings.showInlineButton.desc" }
-        },
-        {
-          "key": "longPressBehavior",
-          "type": "select",
-          "label": { "$t": "settings.longPress.label" },
-          "default": "pill",
-          "options": [
-            { "value": "pill", "label": { "$t": "settings.longPress.pill" } },
-            { "value": "panel", "label": { "$t": "settings.longPress.panel" } },
-            { "value": "off", "label": { "$t": "settings.longPress.off" } }
-          ],
-          "description": { "$t": "settings.longPress.desc" }
         },
         { "type": "header", "label": { "$t": "settings.header.context" } },
         {

@@ -217,12 +217,34 @@ html[data-theme="dark"] .dt-sheet-root {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .dt-stage {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* display:flex 会盖掉 hidden 属性，这里显式兜底 */
+.dt-stage[hidden],
+.dt-switches[hidden],
+.dt-menu[hidden] {
+  display: none !important;
+}
+
+.dt-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dt-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* 输入区 */
@@ -677,59 +699,6 @@ html[data-theme="dark"] .dt-sheet-root {
 
 .dt-menu__item:hover {
   background: var(--dt-surface-3);
-}
-
-/* ---------------- 长按浮标 ---------------- */
-
-.dt-pill,
-.dt-pill * {
-  box-sizing: border-box;
-}
-
-.dt-pill {
-  position: fixed;
-  z-index: 2147482900;
-  animation: dt-pill-in 0.16s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes dt-pill-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.dt-pill__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 13px 0 10px;
-  border: 1px solid var(--dt-border-strong);
-  border-radius: 999px;
-  background: var(--dt-surface);
-  color: var(--dt-text);
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 6px 20px rgba(14, 17, 27, 0.22);
-}
-
-.dt-pill__icon {
-  display: inline-flex;
-  color: var(--dt-accent);
-}
-
-.dt-hidden-copy {
-  position: fixed;
-  left: -9999px;
-  top: 0;
-  opacity: 0;
 }
 
 /* ---------------- 无障碍 ---------------- */

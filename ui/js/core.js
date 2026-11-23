@@ -105,18 +105,17 @@
    * ======================================================= */
 
   var state = {
-    /** 已注册的消息记录，用于长按时定位目标 */
-    messages: [],
     /** 面板 DOM 引用 */
     dom: null,
     /** 面板数据模型 */
     model: null,
-    /** 浮标 DOM */
-    pill: null,
     /** 上次的开关设置（跨聊天记忆） */
     prefs: { useMemory: false, recentN: 0 },
     prefsLoaded: false,
-    gestureInstalled: false,
+    /** 本文档是否承载面板（由聊天页片段认领） */
+    isHost: false,
+    /** 最近一次已处理的跨上下文请求 id，用于去重 */
+    lastRequestId: null,
     lastFocused: null
   };
 
@@ -133,7 +132,6 @@
     return {
       enabled: cfg('enabled', true) !== false,
       showInlineButton: cfg('showInlineButton', true) !== false,
-      longPressBehavior: String(cfg('longPressBehavior', 'pill')),
       defaultUseMemory: cfg('defaultUseMemory', false) === true,
       defaultRecentN: toInt(cfg('defaultRecentN', 0), 0),
       maxRecentN: clamp(toInt(cfg('maxRecentN', 50), 50), 0, 200),
@@ -448,8 +446,7 @@
     /* ---- 主体：输入态 ---- */
     var body = el('div', 'dt-sheet__body');
 
-    var compose = el('div', 'dt-stage dt-stage--compose');
-    compose.setAttribute('data-stage', 'compose');
+    var controls = el('div', 'dt-controls');
 
     var field = el('label', 'dt-field');
     var fieldLabel = el('span', 'dt-field__label', t('runtime.field.instruction'));
@@ -497,10 +494,12 @@
 
     var privacy = el('p', 'dt-note', t('runtime.privacy'));
 
-    compose.appendChild(field);
-    compose.appendChild(memoryRow);
-    compose.appendChild(recentRow);
-    compose.appendChild(privacy);
+    var switches = el('div', 'dt-switches');
+    switches.appendChild(memoryRow);
+    switches.appendChild(recentRow);
+    switches.appendChild(privacy);
+
+    controls.appendChild(field);
 
     /* ---- 主体：预览态 ---- */
     var preview = el('div', 'dt-stage dt-stage--preview');
@@ -521,7 +520,8 @@
     preview.appendChild(cands);
     preview.appendChild(diffWrap);
 
-    body.appendChild(compose);
+    body.appendChild(controls);
+    body.appendChild(switches);
     body.appendChild(preview);
 
     /* ---- 底部 ---- */
@@ -549,7 +549,8 @@
       subtitle: subtitle,
       undoBtn: undoBtn,
       closeBtn: closeBtn,
-      compose: compose,
+      controls: controls,
+      switches: switches,
       preview: preview,
       textarea: textarea,
       memorySwitch: memorySwitch,
@@ -653,6 +654,10 @@
       commitRecent();
     });
 
+    dom.textarea.addEventListener('input', function () {
+      if (state.model) state.model.instruction = dom.textarea.value;
+    });
+
     dom.textarea.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
@@ -681,8 +686,10 @@
 
     var isPreview = model.stage === 'preview';
 
-    dom.compose.hidden = isPreview;
+    /* 微调要求与上下文开关在结果页同样保留：改完可以直接「重新生成」 */
     dom.preview.hidden = !isPreview;
+    /* 输入框只在生成过程中禁用，生成结束立即可改 */
+    dom.textarea.disabled = !!model.busy;
 
     dom.subtitle.textContent = model.target.label;
 
@@ -721,6 +728,8 @@
       var reroll = actionButton('dt-ghost-btn', t('runtime.reroll'), model.busy);
       reroll.disabled = !!model.busy;
       reroll.addEventListener('click', function () {
+        /* 重新生成使用玩家当前改过的微调要求 */
+        if (state.model) state.model.instruction = state.dom.textarea.value.trim();
         runGenerate(true);
       });
       dom.footLeft.appendChild(reroll);
@@ -758,7 +767,6 @@
     if (isPreview) {
       renderPreview();
     } else {
-      dom.textarea.disabled = !!model.busy;
       if (model.error) {
         dom.privacy.textContent = model.error;
         dom.privacy.classList.add('is-error');
@@ -955,7 +963,7 @@
         model.activeIndex = model.candidates.length - 1;
         model.stage = 'preview';
         /* 设置里开启「自动应用」时，生成完直接落盘，不进预览 */
-        if (conf.autoApply) {
+        if (settings().autoApply) {
           if (model.target.kind === 'input') applyToInput();
           else applyToMessage();
         }
@@ -1114,196 +1122,89 @@
   }
 
   /* =========================================================
-   * 长按浮标
+   * 面板宿主与跨上下文请求
+   *
+   * 消息片段可能运行在与聊天页不同的文档（例如 iframe）里，
+   * 此时若就地渲染面板，fixed 定位会被限制在气泡容器内——面板既不在
+   * 屏幕底部，也小到无法操作。所以面板统一由聊天页级片段承载，
+   * 消息片段只负责发请求。
    * ======================================================= */
 
-  function showPill(record) {
-    hidePill();
-    var conf = settings();
-    if (conf.longPressBehavior !== 'pill' || !record) return;
+  var REQUEST_KEY = 'dialog_tune_request';
 
-    var pill = el('div', 'dt-pill');
-    pill.setAttribute('role', 'toolbar');
-    var pillBtn = button('dt-pill__btn', '');
-    var icon = el('span', 'dt-pill__icon');
-    icon.innerHTML =
-      '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">' +
-      '<path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>' +
-      '<circle cx="16" cy="7" r="2.2" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
-      '<circle cx="10" cy="12" r="2.2" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
-      '<circle cx="18" cy="17" r="2.2" stroke="currentColor" stroke-width="1.6" fill="none"/>' +
-      '</svg>';
-    pillBtn.appendChild(icon);
-    pillBtn.appendChild(el('span', 'dt-pill__label', t('actions.dialogTune')));
-    pillBtn.addEventListener('click', function (event) {
-      event.stopPropagation();
-      hidePill();
-      openSheet({ kind: 'message', messageId: record.id, role: record.role });
+  /** 认领面板宿主（由聊天页片段调用） */
+  function claimHost() {
+    state.isHost = true;
+  }
+
+  function makeRequestId() {
+    return 'dt-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  }
+
+  /** 宿主侧：处理来自其它上下文的打开请求（按 id 去重） */
+  function handleRequest(request) {
+    if (!request || !request.id) return;
+    if (state.lastRequestId === request.id) return;
+    state.lastRequestId = request.id;
+    openSheet({
+      kind: request.kind,
+      messageId: request.messageId || null,
+      role: request.role || null
     });
-    pill.appendChild(pillBtn);
+  }
 
-    document.body.appendChild(pill);
+  /**
+   * 打开微调面板。本文档是宿主时直接打开；
+   * 否则把请求转发给宿主（同文档 DOM 事件 → 上级窗口 postMessage → 聊天作用域信箱）。
+   */
+  function requestOpen(target) {
+    if (!settings().enabled) return;
+    if (state.isHost) {
+      openSheet(target);
+      return;
+    }
 
-    var rect = record.el && record.el.getBoundingClientRect
-      ? record.el.getBoundingClientRect()
-      : null;
-    var left = rect ? rect.left + 8 : 12;
-    var top = rect ? rect.bottom + 8 : 96;
-    var maxLeft = window.innerWidth - 132;
-    var maxTop = window.innerHeight - 52;
-    pill.style.left = Math.max(8, Math.min(left, maxLeft)) + 'px';
-    pill.style.top = Math.max(8, Math.min(top, maxTop)) + 'px';
+    var request = {
+      id: makeRequestId(),
+      kind: target.kind,
+      messageId: target.messageId || null,
+      role: target.role || null
+    };
 
-    state.pill = pill;
+    /* 1) 同一文档 */
+    try {
+      document.dispatchEvent(
+        new CustomEvent('dialog-tune-request', { detail: request, bubbles: true })
+      );
+    } catch (e) {
+      /* 忽略 */
+    }
+
+    /* 2) 上级窗口（跨 iframe） */
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ __dialogTune: 'open', request: request }, '*');
+      }
+    } catch (e) {
+      /* 忽略 */
+    }
+
+    /* 3) 聊天作用域信箱 */
+    tavo.variable
+      .set(REQUEST_KEY, request, 'chat')
+      .catch(function () {});
+
+    /* 4) 兜底：700ms 内没人接手（例如聊天页片段未挂载），就地打开 */
     setTimeout(function () {
-      document.addEventListener('pointerdown', onOutsidePointer, true);
-    }, 0);
-  }
-
-  function onOutsidePointer(event) {
-    if (state.pill && state.pill.contains(event.target)) return;
-    hidePill();
-  }
-
-  function hidePill() {
-    if (state.pill && state.pill.parentNode) {
-      state.pill.parentNode.removeChild(state.pill);
-    }
-    state.pill = null;
-    document.removeEventListener('pointerdown', onOutsidePointer, true);
-  }
-
-  /* =========================================================
-   * 手势：长按
-   * ======================================================= */
-
-  var LONG_PRESS_MS = 450;
-  var MOVE_TOLERANCE = 12;
-
-  function installGesture() {
-    if (state.gestureInstalled) return;
-    state.gestureInstalled = true;
-
-    var timer = null;
-    var startX = 0;
-    var startY = 0;
-    var startTarget = null;
-
-    function clear() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    }
-
-    function onDown(event) {
-      if (event.pointerType === 'mouse' && event.button !== 0) return;
-      var target = event.target;
-      if (!target || !target.closest) return;
-      /* 面板自身与浮标内部不参与长按判定 */
-      if (target.closest('.dt-sheet-root, .dt-pill')) return;
-
-      startX = event.clientX;
-      startY = event.clientY;
-      startTarget = target;
-      clear();
-      timer = setTimeout(function () {
-        timer = null;
-        handleLongPress(startTarget);
-      }, LONG_PRESS_MS);
-    }
-
-    function onMove(event) {
-      if (!timer) return;
-      var dx = Math.abs(event.clientX - startX);
-      var dy = Math.abs(event.clientY - startY);
-      if (dx > MOVE_TOLERANCE || dy > MOVE_TOLERANCE) clear();
-    }
-
-    function onUp() {
-      clear();
-    }
-
-    document.addEventListener('pointerdown', onDown, true);
-    document.addEventListener('pointermove', onMove, true);
-    document.addEventListener('pointerup', onUp, true);
-    document.addEventListener('pointercancel', onUp, true);
-  }
-
-  function handleLongPress(target) {
-    if (!target) return;
-    var conf = settings();
-    if (!conf.enabled) return;
-
-    /* 1) 输入框草稿 */
-    var editable = target.closest(
-      'textarea, input[type="text"], input[type="search"], [contenteditable="true"], [contenteditable=""]'
-    );
-    if (editable) {
-      /* 正在选中文本时不劫持手势 */
-      if (editable.selectionStart !== undefined && editable.selectionStart !== editable.selectionEnd) {
-        return;
-      }
-      if (window.getSelection && String(window.getSelection()) !== '') return;
-      if (conf.longPressBehavior === 'off') return;
-      openSheet({ kind: 'input' });
-      return;
-    }
-
-    /* 2) 消息气泡 */
-    var record = resolveMessage(target);
-    if (!record) return;
-    if (conf.longPressBehavior === 'off') return;
-    if (conf.longPressBehavior === 'panel') {
-      openSheet({ kind: 'message', messageId: record.id, role: record.role });
-      return;
-    }
-    showPill(record);
-  }
-
-  function resolveMessage(target) {
-    var best = null;
-    for (var i = 0; i < state.messages.length; i++) {
-      var record = state.messages[i];
-      if (!record || !record.el || !record.el.contains) continue;
-      if (!record.el.isConnected) continue;
-      if (record.el === target || record.el.contains(target)) {
-        if (!best) {
-          best = record;
-        } else if (record.el.contains(best.el)) {
-          best = record;
-        }
-      }
-    }
-    return best;
-  }
-
-  /* =========================================================
-   * 消息注册
-   * ======================================================= */
-
-  function registerMessage(record) {
-    var existing = null;
-    for (var i = 0; i < state.messages.length; i++) {
-      if (state.messages[i] && state.messages[i].id === record.id) {
-        existing = state.messages[i];
-        break;
-      }
-    }
-    if (existing) {
-      existing.el = record.el;
-      existing.role = record.role;
-      existing.content = record.content;
-      return existing;
-    }
-    state.messages.push(record);
-    return record;
-  }
-
-  function unregisterMessage(id) {
-    state.messages = state.messages.filter(function (record) {
-      return record && record.id !== id;
-    });
+      tavo.variable
+        .get(REQUEST_KEY, 'chat')
+        .then(function (value) {
+          if (value && value.id === request.id) {
+            openSheet(target);
+          }
+        })
+        .catch(function () {});
+    }, 700);
   }
 
   /* =========================================================
@@ -1311,26 +1212,24 @@
    * ======================================================= */
 
   window[NS] = {
-    version: '1.0.0',
+    version: '1.0.2',
     pluginId: PLUGIN_ID,
     t: t,
     settings: settings,
     open: openSheet,
     close: closeSheet,
-    showPill: showPill,
-    hidePill: hidePill,
-    registerMessage: registerMessage,
-    unregisterMessage: unregisterMessage,
-    installGesture: installGesture,
+    requestOpen: requestOpen,
+    claimHost: claimHost,
+    handleRequest: handleRequest,
+    isHost: function () {
+      return state.isHost;
+    },
     isEnabled: function () {
       return settings().enabled;
     }
   };
 
-  /* 长按手势由核心自行安装，保证只有 /messages 片段时也可用 */
-  installGesture();
-
-  /* 预建面板 DOM：既避免首次打开的抖动，也让入口可以探测面板是否就绪 */
+  /* 预建面板 DOM：避免首次打开的抖动，也让入口可以探测面板是否就绪 */
   try {
     buildSheet();
   } catch (e) {

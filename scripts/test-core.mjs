@@ -289,29 +289,53 @@ assert(
   '下次打开时恢复上一次的开关状态'
 );
 
-/* 7. 长按浮标 */
-console.log('\n7. 长按浮出「微调」按钮');
-const bubble = window.document.createElement('div');
-bubble.textContent = '我在呢，今天想聊点什么？';
-window.document.body.appendChild(bubble);
-api.registerMessage({ id: 2, role: 'assistant', content: '我在呢，今天想聊点什么？', el: bubble });
-
-function pointerDown(target) {
-  const event = new window.MouseEvent('pointerdown', { bubbles: true, clientX: 20, clientY: 20 });
-  Object.defineProperty(event, 'pointerType', { value: 'touch' });
-  target.dispatchEvent(event);
-}
-pointerDown(bubble);
-await tick(600);
-const pill = window.document.querySelector('.dt-pill');
-assert(!!pill, '长按后浮出浮标');
-assert(
-  pill && pill.textContent.includes('对话微调'),
-  '浮标内含「微调」按钮'
-);
-pill.querySelector('.dt-pill__btn').click();
+/* 7. 面板宿主与跨上下文请求 */
+console.log('\n7. 面板宿主与跨上下文请求');
+await api.close();
+assert(api.isHost() === false, '默认不是宿主（消息片段所在文档）');
+api.requestOpen({ kind: 'message', messageId: 2, role: 'assistant' });
 await tick(20);
-assert(!window.document.querySelector('.dt-sheet-root').hidden, '点击浮标后打开面板');
+assert(
+  store.variables['chat:dialog_tune_request'] &&
+    store.variables['chat:dialog_tune_request'].messageId === 2,
+  '非宿主的请求写进聊天作用域信箱'
+);
+assert(
+  window.document.querySelector('.dt-sheet-root').hidden,
+  '非宿主不会就地渲染面板（避免被限制在气泡容器里）'
+);
+api.claimHost();
+api.handleRequest(store.variables['chat:dialog_tune_request']);
+await tick(20);
+assert(
+  !window.document.querySelector('.dt-sheet-root').hidden,
+  '宿主接手请求后打开面板'
+);
+await api.close();
+
+/* 7.5 生成后仍可修改微调要求 */
+console.log('\n7.5 生成后仍可修改微调要求');
+await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+await tick(10);
+const instructionField = window.document.querySelector('.dt-textarea');
+instructionField.value = '第一版要求';
+byText(window.document, '.dt-primary-btn', '生成微调').click();
+await tick(30);
+assert(instructionField.disabled === false, '生成结束后指令框可编辑');
+assert(
+  store.generated[store.generated.length - 1].prompt.includes('第一版要求'),
+  '首次生成使用了这条指令'
+);
+instructionField.value = '第二版要求';
+instructionField.dispatchEvent(new window.Event('input', { bubbles: true }));
+const before = store.generated.length;
+byText(window.document, '.dt-ghost-btn', '重新生成').click();
+await tick(30);
+assert(store.generated.length === before + 1, '重新生成只调用一次生成接口');
+assert(
+  store.generated[store.generated.length - 1].prompt.includes('第二版要求'),
+  '重新生成使用了改过的指令'
+);
 
 /* 8. 输入框草稿目标 */
 console.log('\n8. 微调输入框草稿');

@@ -8,11 +8,6 @@
   "settings.header.trigger": "触发方式",
   "settings.showInlineButton": "显示行内微调按钮",
   "settings.showInlineButton.desc": "在每条消息下方显示一个小小的「微调」按钮，作为长按之外的备用入口。",
-  "settings.longPress.label": "长按行为",
-  "settings.longPress.pill": "浮出「微调」按钮",
-  "settings.longPress.panel": "直接打开微调面板",
-  "settings.longPress.off": "不响应长按",
-  "settings.longPress.desc": "Tavo 原生的长按菜单无法被插件扩展，因此插件使用自己的浮标或面板。",
   "settings.header.context": "上下文",
   "settings.defaultUseMemory": "默认使用长记忆",
   "settings.defaultUseMemory.desc": "打开微调面板时默认带上当前聊天的长期记忆。关闭状态会被记住，下次打开保持不变。",
@@ -84,5 +79,6 @@
   "error.appendFailed": "追加消息失败",
   "error.noVariants": "没有可切换的版本",
   "runtime.moreActions": "更多应用方式",
-  "releaseNotes.1_0_1": "## 1.0.1 更新\n\n- 移除生成超时限制，等不及可以自行取消\n- 修复微调要求输入框超出屏幕宽度的问题\n- 「生成中」增加加载动画\n- 结果页只展示改写后的正文，差异处直接内联高亮\n- 底部按钮收进「应用到消息」的下拉菜单，窄屏不再换行"
+  "releaseNotes.1_0_1": "## 1.0.1 更新\n\n- 移除生成超时限制，等不及可以自行取消\n- 修复微调要求输入框超出屏幕宽度的问题\n- 「生成中」增加加载动画\n- 结果页只展示改写后的正文，差异处直接内联高亮\n- 底部按钮收进「应用到消息」的下拉菜单，窄屏不再换行",
+  "releaseNotes.1_0_2": "## 1.0.2 更新\n\n- 面板改由聊天页承载：点行内「微调」后，面板不再挤在气泡下方，现在贴屏幕底部、可正常操作\n- 移除长按功能与相关设置\n- 修复生成流程报错导致结果不显示、差异高亮不出现的问题\n- 生成后「微调要求」仍可编辑，改动会用于「重新生成」\n- 行内「微调」按钮颜色加深，更容易看到"
 }
