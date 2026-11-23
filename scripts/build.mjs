@@ -5,9 +5,11 @@
  * 用法：node scripts/build.mjs
  */
 import zlib from 'node:zlib';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from 'node:fs';
 import { dirname, resolve, relative, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = resolve(ROOT, 'dist');
@@ -135,8 +137,39 @@ if (!files.some((f) => f.endsWith('manifest.json'))) {
 }
 
 mkdirSync(DIST, { recursive: true });
-const outFile = resolve(DIST, `${manifest.id}-${manifest.version}.tpg`);
-writeFileSync(outFile, buildZip(files));
 
-console.log(`已打包 ${files.length} 个文件 → ${relative(ROOT, outFile)}`);
-for (const file of files) console.log('  -', relative(ROOT, file));
+const baseName = `dialog-tune-${manifest.version}`;
+const outputs = [resolve(DIST, `${baseName}.tpg`), resolve(DIST, `${baseName}.zip`)];
+
+/**
+ * 优先使用系统 zip（Info-ZIP，官方文档示例同款），产出兼容性最好的包；
+ * 没有 zip 命令时退回内置的最小 ZIP 写入器。
+ */
+function packageWithSystemZip(outFile) {
+  const result = spawnSync('zip', ['-r', '-q', outFile, ...INCLUDE], {
+    cwd: ROOT,
+    stdio: 'pipe'
+  });
+  if (result.error) return false;
+  if (result.status !== 0) {
+    process.stderr.write(result.stderr ? result.stderr.toString() : '');
+    return false;
+  }
+  return true;
+}
+
+let usedSystemZip = false;
+for (const outFile of outputs) {
+  rmSync(outFile, { force: true });
+  if (packageWithSystemZip(outFile)) {
+    usedSystemZip = true;
+  } else {
+    writeFileSync(outFile, buildZip(files));
+  }
+}
+
+console.log(`已打包 ${files.length} 个文件（${usedSystemZip ? '系统 zip / Info-ZIP' : '内置 ZIP 写入器'}）`);
+for (const outFile of outputs) {
+  console.log('  -', relative(ROOT, outFile), `(${(statSync(outFile).size / 1024).toFixed(1)} KB)`);
+}
+for (const file of files) console.log('    ·', relative(ROOT, file));
