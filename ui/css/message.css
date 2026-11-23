@@ -3,8 +3,14 @@
  * 刻意做得很轻：不抢气泡的视觉重量，悬停/聚焦时再强调。
  */
 
+.dt-msg,
+.dt-msg * {
+  box-sizing: border-box;
+}
+
 .dt-msg {
   display: flex;
+  min-width: 0;
   margin: 6px 0 2px;
   pointer-events: none;
 }

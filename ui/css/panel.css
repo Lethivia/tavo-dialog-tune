@@ -43,6 +43,14 @@
   display: none;
 }
 
+/* 关键：默认的 content-box 会让 width:100% 的元素再加上 padding/border 而溢出屏幕 */
+.dt-sheet-root,
+.dt-sheet-root *,
+.dt-sheet-root *::before,
+.dt-sheet-root *::after {
+  box-sizing: border-box;
+}
+
 @media (prefers-color-scheme: dark) {
   .dt-sheet-root {
     --dt-accent: #818cf8;
@@ -109,6 +117,7 @@ html[data-theme="dark"] .dt-sheet-root {
   position: relative;
   width: 100%;
   max-width: 620px;
+  min-width: 0;
   max-height: calc(100vh - var(--dt-inset-top) - var(--dt-inset-bottom) - 24px);
   display: flex;
   flex-direction: column;
@@ -222,6 +231,8 @@ html[data-theme="dark"] .dt-sheet-root {
   display: flex;
   flex-direction: column;
   gap: 7px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .dt-field__label {
@@ -232,6 +243,8 @@ html[data-theme="dark"] .dt-sheet-root {
 
 .dt-textarea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 84px;
   resize: vertical;
   padding: 11px 12px;
@@ -458,8 +471,9 @@ html[data-theme="dark"] .dt-sheet-root {
   line-height: 1.62;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 30vh;
+  max-height: 46vh;
   overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 
 .dt-diff__body--tuned {
@@ -484,6 +498,29 @@ html[data-theme="dark"] .dt-sheet-root {
   opacity: 0.85;
 }
 
+/* ---------------- 加载动画 ---------------- */
+
+.dt-spinner {
+  display: inline-block;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: dt-spin 0.7s linear infinite;
+}
+
+@keyframes dt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dt-btn__label {
+  white-space: nowrap;
+}
+
 /* ---------------- 底部按钮 ---------------- */
 
 .dt-sheet__foot {
@@ -506,6 +543,7 @@ html[data-theme="dark"] .dt-sheet-root {
 }
 
 .dt-foot__right {
+  position: relative;
   margin-left: auto;
 }
 
@@ -554,7 +592,99 @@ html[data-theme="dark"] .dt-sheet-root {
   cursor: default;
 }
 
+.dt-primary-btn.is-busy,
+.dt-ghost-btn.is-busy {
+  opacity: 1;
+  cursor: progress;
+}
+
+/* 主按钮 + 下拉 */
+.dt-split {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.dt-split__main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-right: 14px;
+}
+
+.dt-split__toggle {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 9px 11px;
+  border-left: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.dt-caret {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-top: 2px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+}
+
+/* 下拉菜单 */
+.dt-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 2;
+  min-width: 148px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--dt-border);
+  border-radius: 12px;
+  background: var(--dt-surface);
+  box-shadow: var(--dt-shadow);
+  animation: dt-menu-in 0.14s ease;
+}
+
+.dt-menu[hidden] {
+  display: none;
+}
+
+@keyframes dt-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dt-menu__item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dt-text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s ease;
+}
+
+.dt-menu__item:hover {
+  background: var(--dt-surface-3);
+}
+
 /* ---------------- 长按浮标 ---------------- */
+
+.dt-pill,
+.dt-pill * {
+  box-sizing: border-box;
+}
 
 .dt-pill {
   position: fixed;

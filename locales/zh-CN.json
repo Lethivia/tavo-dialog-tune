@@ -1,9 +1,8 @@
 {
   "plugin.name": "对话微调",
-  "plugin.description": "「对话微调」用于对 AI 的回复或你自己的输入做定向微调。长按聊天气泡或输入框会浮出「微调」按钮，点开后输入微调要求，可选择是否带上长记忆与最近若干条对话作为背景，然后调用当前聊天绑定的模型 API 重新生成整段内容。生成结果先给出前后对照与差异高亮，确认后再写回；写回会作为该条消息的一个生成版本保存，可用 Tavo 原生的版本切换随时切回原文。插件不做任何自动判断：改多少、是否保留原文、要不要整段替换，都由你决定。",
-  "releaseNotes.1_0_0": "## 首次发布\n\n- 长按聊天气泡或输入框，浮出「微调」按钮\n- 微调面板：微调要求输入框、使用长记忆开关、最近 N 条对话\n- 调用当前聊天绑定的模型 API 重新生成整段内容\n- 生成结果提供前后对照与差异高亮，可重新生成\n- 写回作为消息的一个生成版本保存，可用原生版本切回原文\n- 支持英文与简体中文界面",
+  "plugin.description": "「对话微调」用于对 AI 的回复或你自己的输入做定向微调。长按聊天气泡或输入框会浮出「微调」按钮，点开后输入微调要求，可选择是否带上长记忆与最近若干条对话作为背景，然后调用当前聊天绑定的模型 API 重新生成整段内容。生成结果只在改写后的正文上高亮标出差异，确认后再写回；写回会作为该条消息的一个生成版本保存，可用 Tavo 原生的版本切换随时切回原文。插件不做任何自动判断：改多少、是否保留原文、要不要整段替换，都由你决定。",
+  "releaseNotes.1_0_0": "## 首次发布\n\n- 长按聊天气泡或输入框，浮出「微调」按钮\n- 微调面板：微调要求输入框、使用长记忆开关、最近 N 条对话\n- 调用当前聊天绑定的模型 API 重新生成整段内容\n- 结果页只展示改写后的正文，差异处直接内联高亮，可重新生成\n- 写回作为消息的一个生成版本保存，可用原生版本切回原文\n- 支持英文与简体中文界面",
   "actions.dialogTune": "对话微调",
-
   "settings.info": "「对话微调」的默认设置。引导提示词决定模型如何执行微调，可按自己的写作习惯改写。",
   "settings.enabled": "启用插件",
   "settings.header.trigger": "触发方式",
@@ -26,15 +25,12 @@
   "settings.guidePrompt.default": "你是一个文本微调助手。请按照玩家给出的「微调要求」改写下面的原文，并遵守：\n1. 只改动与要求直接相关的部分，其余内容逐字保留，包括标点、换行、格式、称呼、专有名词与情绪强度。\n2. 不增删信息，不总结，不续写，不评价原文。\n3. 保留原文的人称、时态与语气；除非要求里明确说明，否则不要把叙述改成对话。\n4. 输出完整的改写后正文，不要输出改动说明、前言、总结或 Markdown 代码块。",
   "settings.guidePrompt.placeholder": "留空则使用默认引导提示词。",
   "settings.guidePrompt.desc": "这段提示词会放在原文之前，用来告诉模型如何执行微调。你可以直接改写它，让微调更符合自己的习惯。",
-  "settings.timeoutSeconds": "生成超时（秒）",
-  "settings.timeoutSeconds.desc": "超过这个时间还没返回就判定失败，原文保持不变。",
   "settings.autoApply": "生成后直接应用",
   "settings.autoApply.desc": "跳过对照预览，生成完立即写回。默认关闭。",
   "settings.contentLanguage": "输出语言",
   "settings.contentLanguage.source": "与原文一致",
   "settings.contentLanguage.app": "跟随 App 语言",
   "settings.contentLanguage.desc": "决定改写后正文使用哪种语言。默认与原文保持一致。",
-
   "runtime.title": "对话微调",
   "runtime.close": "关闭",
   "runtime.cancel": "取消",
@@ -66,13 +62,10 @@
   "runtime.privacy": "开启的选项会随原文一起发送给当前聊天绑定的模型。",
   "runtime.target.message": "{role}消息 · {count} 字",
   "runtime.target.input": "我的输入 · {count} 字",
-  "runtime.diff.original": "原文",
-  "runtime.diff.tuned": "微调后",
+  "runtime.diff.tuned": "微调结果",
   "runtime.candidateLabel": "第 {index} 次生成结果",
-
   "role.user": "我的",
   "role.assistant": "角色",
-
   "prompt.memoryBlock": "以下是当前聊天的长期记忆，仅作为背景参考，不要据此改动原文：\n<memory>\n{memory}\n</memory>",
   "prompt.recentBlock": "以下是最近的对话，仅作为背景参考，不要据此改动原文：\n<dialogue>\n{dialogue}\n</dialogue>",
   "prompt.sourceBlock": "请改写下面这段原文：\n<source>\n{source}\n</source>",
@@ -80,7 +73,6 @@
   "prompt.outputLanguageSource": "输出语言与原文保持一致。",
   "prompt.outputLanguageApp": "输出语言使用 {locale}。",
   "prompt.outputRule": "现在输出改写后的完整正文，不要输出任何解释、前言或代码块。",
-
   "error.messageMissing": "找不到这条消息，可能已被删除",
   "error.emptyTarget": "没有可微调的内容",
   "error.instructionRequired": "请先填写微调要求",
@@ -90,5 +82,6 @@
   "error.copyFailed": "复制失败，请手动选择文本复制",
   "error.applyFailed": "应用失败，原文未被改动",
   "error.appendFailed": "追加消息失败",
-  "error.noVariants": "没有可切换的版本"
+  "error.noVariants": "没有可切换的版本",
+  "runtime.moreActions": "更多应用方式"
 }

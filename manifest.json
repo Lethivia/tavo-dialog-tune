@@ -116,13 +116,6 @@
           "description": { "$t": "settings.guidePrompt.desc" }
         },
         {
-          "key": "timeoutSeconds",
-          "type": "text",
-          "label": { "$t": "settings.timeoutSeconds" },
-          "default": "60",
-          "description": { "$t": "settings.timeoutSeconds.desc" }
-        },
-        {
           "key": "autoApply",
           "type": "switch",
           "label": { "$t": "settings.autoApply" },

@@ -58,6 +58,32 @@
     return node;
   }
 
+  /** 生成中的加载圈 */
+  /** 清空容器子节点，可保留指定节点 */
+  function clearChildren(node, keep) {
+    var children = Array.prototype.slice.call(node.children);
+    children.forEach(function (child) {
+      if (child !== keep) node.removeChild(child);
+    });
+  }
+
+  function spinner() {
+    var node = el('span', 'dt-spinner');
+    node.setAttribute('aria-hidden', 'true');
+    return node;
+  }
+
+  /** 带加载态的按钮 */
+  function actionButton(className, label, busy) {
+    var node = button(className, '');
+    if (busy) {
+      node.classList.add('is-busy');
+      node.appendChild(spinner());
+    }
+    node.appendChild(el('span', 'dt-btn__label', label));
+    return node;
+  }
+
   function button(className, text, ariaLabel) {
     var node = el('button', className, text);
     node.type = 'button';
@@ -96,6 +122,9 @@
 
   var PREFS_KEY = 'dialog_tune_prefs';
 
+  /** 当前下拉菜单的触发按钮 */
+  var menuToggle = null;
+
   /* =========================================================
    * 设置项
    * ======================================================= */
@@ -108,7 +137,6 @@
       defaultUseMemory: cfg('defaultUseMemory', false) === true,
       defaultRecentN: toInt(cfg('defaultRecentN', 0), 0),
       maxRecentN: clamp(toInt(cfg('maxRecentN', 50), 50), 0, 200),
-      timeoutSeconds: clamp(toInt(cfg('timeoutSeconds', 60), 60), 5, 600),
       autoApply: cfg('autoApply', false) === true,
       contentLanguage: String(cfg('contentLanguage', 'source')),
       guidePrompt: String(cfg('guidePrompt', ''))
@@ -483,17 +511,11 @@
     var previewError = el('p', 'dt-note dt-note--error');
     previewError.hidden = true;
     var diffWrap = el('div', 'dt-diff');
-    var originalBlock = el('div', 'dt-diff__block');
-    originalBlock.appendChild(el('div', 'dt-diff__head', t('runtime.diff.original')));
-    var originalBody = el('div', 'dt-diff__body');
-    originalBlock.appendChild(originalBody);
-
     var tunedBlock = el('div', 'dt-diff__block');
     tunedBlock.appendChild(el('div', 'dt-diff__head', t('runtime.diff.tuned')));
     var tunedBody = el('div', 'dt-diff__body dt-diff__body--tuned');
     tunedBlock.appendChild(tunedBody);
 
-    diffWrap.appendChild(originalBlock);
     diffWrap.appendChild(tunedBlock);
     preview.appendChild(previewError);
     preview.appendChild(cands);
@@ -506,6 +528,11 @@
     var foot = el('footer', 'dt-sheet__foot');
     var footLeft = el('div', 'dt-foot__left');
     var footRight = el('div', 'dt-foot__right');
+    var menu = el('div', 'dt-menu');
+    menu.setAttribute('role', 'menu');
+    menu.hidden = true;
+    footRight.appendChild(menu);
+
     foot.appendChild(footLeft);
     foot.appendChild(footRight);
 
@@ -534,10 +561,10 @@
       privacy: privacy,
       cands: cands,
       previewError: previewError,
-      originalBody: originalBody,
       tunedBody: tunedBody,
       footLeft: footLeft,
-      footRight: footRight
+      footRight: footRight,
+      menu: menu
     };
 
     wireSheetEvents();
@@ -550,6 +577,49 @@
       /* 忽略 */
     }
     return state.dom;
+  }
+
+  /** 低频操作菜单 */
+  function buildMenu(isInput) {
+    var dom = state.dom;
+    if (!dom) return;
+    dom.menu.textContent = '';
+    var items = isInput
+      ? [{ label: t('runtime.copy'), run: copyCurrent }]
+      : [
+          { label: t('runtime.appendAsNew'), run: applyAsNewMessage },
+          { label: t('runtime.applyToInput'), run: applyToInput },
+          { label: t('runtime.copy'), run: copyCurrent }
+        ];
+    items.forEach(function (item) {
+      var node = button('dt-menu__item', item.label);
+      node.setAttribute('role', 'menuitem');
+      node.addEventListener('click', function () {
+        closeMenu();
+        item.run();
+      });
+      dom.menu.appendChild(node);
+    });
+  }
+
+  function toggleMenu(open) {
+    var dom = state.dom;
+    if (!dom) return;
+    dom.menu.hidden = !open;
+    if (menuToggle) menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) document.addEventListener('pointerdown', onMenuOutside, true);
+    else document.removeEventListener('pointerdown', onMenuOutside, true);
+  }
+
+  function closeMenu() {
+    toggleMenu(false);
+  }
+
+  function onMenuOutside(event) {
+    var dom = state.dom;
+    if (dom && dom.menu.contains(event.target)) return;
+    if (menuToggle && menuToggle.contains(event.target)) return;
+    closeMenu();
   }
 
   function wireSheetEvents() {
@@ -591,9 +661,12 @@
     });
 
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && state.dom && !state.dom.root.hidden) {
-        closeSheet();
+      if (event.key !== 'Escape' || !state.dom || state.dom.root.hidden) return;
+      if (!state.dom.menu.hidden) {
+        closeMenu();
+        return;
       }
+      closeSheet();
     });
   }
 
@@ -621,9 +694,11 @@
     dom.recentHint.textContent = t('runtime.switch.recentHint');
     dom.privacy.textContent = t('runtime.privacy');
 
-    /* 底部按钮 */
-    dom.footLeft.textContent = '';
-    dom.footRight.textContent = '';
+    closeMenu();
+
+    /* 底部按钮：只清理普通按钮，保留下拉菜单节点 */
+    clearChildren(dom.footLeft);
+    clearChildren(dom.footRight, dom.menu);
 
     if (!isPreview) {
       var cancelBtn = button('dt-ghost-btn', t('runtime.cancel'));
@@ -632,48 +707,52 @@
       });
       dom.footLeft.appendChild(cancelBtn);
 
-      var confirmBtn = button('dt-primary-btn', model.busy ? t('runtime.generating') : t('runtime.confirm'));
+      var confirmBtn = actionButton(
+        'dt-primary-btn',
+        model.busy ? t('runtime.generating') : t('runtime.confirm'),
+        model.busy
+      );
       confirmBtn.disabled = !!model.busy;
       confirmBtn.addEventListener('click', function () {
         confirmCompose();
       });
       dom.footRight.appendChild(confirmBtn);
     } else {
-      var reroll = button('dt-ghost-btn', t('runtime.reroll'));
+      var reroll = actionButton('dt-ghost-btn', t('runtime.reroll'), model.busy);
       reroll.disabled = !!model.busy;
       reroll.addEventListener('click', function () {
         runGenerate(true);
       });
       dom.footLeft.appendChild(reroll);
 
-      var copyBtn = button('dt-ghost-btn', t('runtime.copy'));
-      copyBtn.addEventListener('click', function () {
-        copyCurrent();
+      /* 主按钮 + 下拉：把低频操作收进菜单，窄屏也不会换行 */
+      var isInput = model.target.kind === 'input';
+      var split = el('div', 'dt-split');
+      var mainBtn = button(
+        'dt-primary-btn dt-split__main',
+        isInput ? t('runtime.applyToInput') : t('runtime.applyToMessage')
+      );
+      mainBtn.disabled = !!model.busy;
+      mainBtn.addEventListener('click', function () {
+        if (isInput) applyToInput();
+        else applyToMessage();
       });
-      dom.footRight.appendChild(copyBtn);
 
-      if (model.target.kind === 'input') {
-        var backBtn = button('dt-primary-btn', t('runtime.applyToInput'));
-        backBtn.disabled = !!model.busy;
-        backBtn.addEventListener('click', function () {
-          applyToInput();
-        });
-        dom.footRight.appendChild(backBtn);
-      } else {
-        var appendBtn = button('dt-ghost-btn', t('runtime.appendAsNew'));
-        appendBtn.disabled = !!model.busy;
-        appendBtn.addEventListener('click', function () {
-          applyAsNewMessage();
-        });
-        dom.footRight.appendChild(appendBtn);
+      var toggle = button('dt-primary-btn dt-split__toggle', '');
+      toggle.setAttribute('aria-haspopup', 'menu');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.setAttribute('aria-label', t('runtime.moreActions'));
+      toggle.appendChild(el('span', 'dt-caret'));
+      menuToggle = toggle;
+      toggle.addEventListener('click', function (event) {
+        event.stopPropagation();
+        toggleMenu(dom.menu.hidden);
+      });
 
-        var applyBtn = button('dt-primary-btn', t('runtime.applyToMessage'));
-        applyBtn.disabled = !!model.busy;
-        applyBtn.addEventListener('click', function () {
-          applyToMessage();
-        });
-        dom.footRight.appendChild(applyBtn);
-      }
+      split.appendChild(mainBtn);
+      split.appendChild(toggle);
+      dom.footRight.appendChild(split);
+      buildMenu(isInput);
     }
 
     if (isPreview) {
@@ -718,10 +797,7 @@
       });
     }
 
-    /* 原文 */
-    dom.originalBody.textContent = model.source;
-
-    /* 微调后：差异高亮 */
+    /* 只展示微调后的正文，差异直接内联高亮 */
     dom.tunedBody.textContent = '';
     var segments = buildDiff(model.source, text);
     if (!segments) {
@@ -867,13 +943,10 @@
     model.error = null;
     render();
 
-    var conf = settings();
     buildPrompt(model)
       .then(function (prompt) {
-        return tavo.generate(prompt, {
-          context: false,
-          timeout: conf.timeoutSeconds * 1000
-        });
+        /* 不设超时：等不及的玩家会自己取消，由玩家决定节奏 */
+        return tavo.generate(prompt, { context: false });
       })
       .then(function (text) {
         var result = text === null || text === undefined ? '' : String(text);

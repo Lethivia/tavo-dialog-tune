@@ -236,9 +236,12 @@ assert(
   '差异部分有高亮标记'
 );
 assert(
-  window.document.querySelector('.dt-diff__body') !== null &&
-    window.document.querySelectorAll('.dt-diff__block').length === 2,
-  '同时展示原文与微调后两块内容'
+  window.document.querySelectorAll('.dt-diff__block').length === 1,
+  '只展示改写后的正文，不再并列原文'
+);
+assert(
+  window.document.querySelector('.dt-diff__body--tuned') !== null,
+  '改写后的正文带有差异高亮容器'
 );
 
 /* 4. 重新生成并保留历次结果 */
@@ -358,6 +361,51 @@ assert(
   '面板内显示失败原因'
 );
 tavo.generate = originalGenerate;
+
+/* 11. 底部主按钮与下拉菜单 */
+console.log('\n11. 主按钮与下拉菜单');
+await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+await tick(10);
+window.document.querySelector('.dt-textarea').value = '换个说法';
+byText(window.document, '.dt-primary-btn', '生成微调').click();
+await tick(30);
+const caret = window.document.querySelector('.dt-split__toggle');
+assert(!!caret, '存在下拉触发按钮');
+caret.click();
+await tick(5);
+const menu = window.document.querySelector('.dt-menu');
+assert(menu && !menu.hidden, '下拉菜单已展开');
+const menuLabels = Array.from(menu.querySelectorAll('.dt-menu__item')).map((n) => n.textContent);
+assert(menuLabels.some((l) => l.includes('作为新消息')), '菜单里收进了「作为新消息」');
+assert(menuLabels.some((l) => l.includes('复制')), '菜单里收进了「复制」');
+assert(
+  window.document.querySelectorAll('.dt-sheet__foot .dt-primary-btn').length === 2,
+  '底部只剩主按钮与下拉触发器，不再挤一排按钮'
+);
+const appendItem = Array.from(menu.querySelectorAll('.dt-menu__item')).find((n) =>
+  n.textContent.includes('作为新消息')
+);
+appendItem.click();
+await tick(20);
+assert(store.appended.length === 1, '菜单里的「作为新消息」生效');
+
+/* 12. 生成中的加载动画 */
+console.log('\n12. 生成中显示加载动画');
+let resolveGenerate;
+tavo.generate = () => new Promise((resolve) => { resolveGenerate = resolve; });
+await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+await tick(10);
+window.document.querySelector('.dt-textarea').value = '再改改';
+byText(window.document, '.dt-primary-btn', '生成微调').click();
+await tick(10);
+assert(window.document.querySelector('.dt-spinner') !== null, '生成中按钮出现加载圈');
+assert(
+  byText(window.document, '.dt-primary-btn', '生成中').textContent.includes('生成中'),
+  '生成中按钮文案切换为「生成中…」'
+);
+resolveGenerate('我在这儿，今天想聊点什么？');
+await tick(30);
+assert(window.document.querySelector('.dt-spinner') === null, '生成结束后加载圈消失');
 
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);
