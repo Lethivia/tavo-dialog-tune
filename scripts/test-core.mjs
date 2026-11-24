@@ -919,5 +919,78 @@ console.log('\n26. 调试信息');
   assert(debugBox().hidden === true, '关掉调试开关后调试区隐藏');
 }
 
+/* 27. 改了思考开关/档位后，「重新生成」必须用新设置 */
+console.log('\n27. 重新生成应用新的思考设置');
+{
+  const familySelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(1)');
+  const levelSelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(2)');
+
+  CONFIG.thinkingParamStyle = 'platform';
+  /* 隔离：清掉上一个用例持久化的偏好，从干净状态开始 */
+  delete store.variables['global:dialog_tune_thinking'];
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(20);
+
+  /* 第一次：关闭思考 */
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  let options = store.generated[store.generated.length - 1].options;
+  assert(!options.settings, '第一次请求不带思考参数（默认关闭）', JSON.stringify(options));
+
+  /* 改档位为 low，然后点「重新生成」 */
+  familySelect().value = 'openai';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  levelSelect().value = 'low';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+
+  const before = store.generated.length;
+  byText(window.document, '.dt-ghost-btn', '重新生成').click();
+  await tick(30);
+  assert(store.generated.length === before + 1, '「重新生成」确实又发了一次请求');
+  options = store.generated[store.generated.length - 1].options;
+  assert(
+    options.settings && options.settings.reasoning_effort === 'low',
+    '重新生成用的是改过的档位（reasoning_effort=low）',
+    JSON.stringify(options)
+  );
+
+  /* 再改成「关闭」，重新生成应回到不带参数 */
+  levelSelect().value = 'off';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  const before2 = store.generated.length;
+  byText(window.document, '.dt-ghost-btn', '重新生成').click();
+  await tick(30);
+  options = store.generated[store.generated.length - 1].options;
+  assert(
+    !options.settings,
+    '改回「关闭」后重新生成又变成不带参数',
+    JSON.stringify(options)
+  );
+
+  /* 手填 body 改动后重新生成也生效 */
+  levelSelect().value = 'custom';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  const area = window.document.querySelector('.dt-textarea--mono');
+  area.value = '{"thinking": {"type": "disabled"}}';
+  area.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(10);
+  const before3 = store.generated.length;
+  byText(window.document, '.dt-ghost-btn', '重新生成').click();
+  await tick(30);
+  options = store.generated[store.generated.length - 1].options;
+  assert(
+    options.settings && options.settings.thinking &&
+      options.settings.thinking.type === 'disabled',
+    '手填 body 改动后重新生成也会用新的内容',
+    JSON.stringify(options)
+  );
+
+  CONFIG.thinkingParamStyle = 'tavo';
+}
+
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);
