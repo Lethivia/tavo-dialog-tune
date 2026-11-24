@@ -178,9 +178,18 @@ Tavo 原生的长按气泡菜单（复制 / 改写 / 回溯 / 删除 / 隐藏 / 
 | 智谱 GLM | `zhipu.reasoning_effort`（5.3 强制思考） | low / high / max | [docs.bigmodel.cn](https://docs.bigmodel.cn/cn/guide/capabilities/thinking) |
 | Anthropic | `claude_thinking.budget_tokens` | 2048 / 8192 / 16384 | [platform.claude.com](https://platform.claude.com/docs/en/build-with-claude/thinking) |
 | Google Gemini | `gemini_thinking_level` | MINIMAL / LOW / MEDIUM / HIGH / XHIGH | [ai.google.dev](https://ai.google.dev/gemini-api/docs/thinking) |
-| 小米 MiMo / Grok / Kimi / Qwen | 原生参数表暂无对应 id → **只能手填** | — | [mimo](https://mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md) · [grok](https://docs.x.ai/developers/model-capabilities/text/reasoning) · [kimi](https://platform.kimi.ai/docs/guide/use-reasoning-effort) · [qwen](https://www.alibabacloud.com/help/en/model-studio/deep-thinking) |
+| 小米 MiMo | `thinking.type`（平台字段，标注未验证） | 开启 / 关闭 | [mimo](https://mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md) · [grok](https://docs.x.ai/developers/model-capabilities/text/reasoning) · [kimi](https://platform.kimi.ai/docs/guide/use-reasoning-effort) · [qwen](https://www.alibabacloud.com/help/en/model-studio/deep-thinking) |
 
 各家「关闭思考」的语义不统一（`none` / `disabled` / `minimal` / 省略参数），**强制思考的型号不给关闭档**（官方说明传 `disabled` 会 400）。
+
+### 参数写法（两种都试）
+
+设置页可切换「参数写法」：
+
+- **Tavo 参数 id（推荐）**：`settings` 里放 `openai.reasoning_effort` 这类 Tavo 内部 id，原生层查表翻译成平台字段——这是 Tavo 自己认的参数，成功率最高；
+- **平台原生字段**：直接发 `reasoning_effort` / `thinking:{type:"enabled"}`。文本生成路径能否透传**未经验证**，但如果上面那种不生效，多半是这个原因。
+
+面板上每个模型族都有「关闭 / 开启 / 各级强度 / 自定义 JSON」。**没有对应 Tavo 参数 id 的厂商（MiMo / Grok / Kimi / Qwen）会自动回退到平台字段**，并在档位名后标注「未验证」——因为这些平台的官方关闭语义各不相同，插件不能替官方保证。
 
 ### ⚠️ 这个功能的确切状态
 

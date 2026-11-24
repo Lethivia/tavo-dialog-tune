@@ -4,14 +4,14 @@
   "name": {
     "$t": "plugin.name"
   },
-  "version": "1.1.1",
+  "version": "1.1.2",
   "entry": "entry.js",
   "author": "Lethivia",
   "description": {
     "$t": "plugin.description"
   },
   "releaseNotes": {
-    "$t": "releaseNotes.1_1_1"
+    "$t": "releaseNotes.1_1_2"
   },
   "localization": {
     "defaultLocale": "en",
@@ -253,6 +253,18 @@
               "label": {
                 "$t": "runtime.thinking.family.custom"
               }
+            },
+            {
+              "value": "openrouter",
+              "label": {
+                "$t": "runtime.thinking.family.openrouter"
+              }
+            },
+            {
+              "value": "grok",
+              "label": {
+                "$t": "runtime.thinking.family.grok"
+              }
             }
           ]
         },
@@ -270,6 +282,31 @@
           },
           "description": {
             "$t": "settings.thinkingCustomBody.desc"
+          }
+        },
+        {
+          "key": "thinkingParamStyle",
+          "type": "select",
+          "label": {
+            "$t": "settings.thinkingParamStyle"
+          },
+          "default": "tavo",
+          "options": [
+            {
+              "value": "tavo",
+              "label": {
+                "$t": "settings.thinkingParamStyle.tavo"
+              }
+            },
+            {
+              "value": "platform",
+              "label": {
+                "$t": "settings.thinkingParamStyle.platform"
+              }
+            }
+          ],
+          "description": {
+            "$t": "settings.thinkingParamStyle.desc"
           }
         }
       ]

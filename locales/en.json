@@ -112,5 +112,11 @@
   "runtime.thinking.level.xhigh": "Extra high",
   "runtime.thinking.level.max": "Max",
   "runtime.thinking.family.grok": "xAI Grok",
-  "releaseNotes.1_1_1": "## 1.1.1\n\n- Thinking parameters now use Tavo's internal model parameter ids (e.g. openai.reasoning_effort); the native layer translates them per platform\n- Removed the 'where to place the parameters' setting: text generation has no extraBody, the old form was wrong\n- The manual JSON example now shows the parameter id form"
+  "settings.thinkingParamStyle": "Raw platform fields",
+  "settings.thinkingParamStyle.tavo": "Raw platform fields",
+  "settings.thinkingParamStyle.platform": "Raw platform fields",
+  "settings.thinkingParamStyle.desc": "Tavo parameter ids are translated by the native layer (most reliable); whether raw platform fields pass through in text generation is unverified — try both.",
+  "runtime.thinking.unconfirmed": " (unverified)",
+  "runtime.thinking.family.openrouter": "OpenRouter",
+  "releaseNotes.1_1_2": "## 1.1.2\n\n- Added OpenRouter and xAI Grok to the family list, keeping settings and panel in sync\n- Every family now offers an off/on level instead of custom JSON only\n- New 'parameter style' setting: Tavo parameter ids (recommended) or raw platform fields\n- The family and level dropdowns now fit the screen width"
 }

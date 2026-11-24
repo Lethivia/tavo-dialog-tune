@@ -27,7 +27,7 @@ function assert(condition, label, extra = '') {
 
 /* ---------------- 假 Tavo 宿主（与片段测试共用同一份） ---------------- */
 
-const { tavo, store } = createFakeTavo(catalog);
+const { tavo, store, CONFIG } = createFakeTavo(catalog);
 
 /* ---------------- 启动 jsdom ---------------- */
 
@@ -681,14 +681,15 @@ console.log('\n22. 各模型族的档位');
   familySelect().value = 'glm';
   familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
   await tick(10);
+  const glmOff = Array.from(levelSelect().options).find((o) => o.value === 'off');
   assert(
-    !levelsOf().includes('off'),
-    'GLM-5.3 强制思考：不提供「关闭」档（官方说明 disabled 会 400）',
-    JSON.stringify(levelsOf())
+    !!glmOff && /未验证|unverified/.test(glmOff.textContent),
+    'GLM 的「关闭」档存在但标注为未验证（GLM-5.3 官方说明 disabled 会 400）',
+    glmOff ? glmOff.textContent : '缺少 off 档'
   );
   assert(
-    JSON.stringify(levelsOf()) === JSON.stringify(['low', 'high', 'max']),
-    'GLM 的档位是 low/high/max',
+    JSON.stringify(levelsOf()) === JSON.stringify(['off', 'low', 'high', 'max']),
+    'GLM 的档位是关闭 + low/high/max',
     JSON.stringify(levelsOf())
   );
 
@@ -696,8 +697,8 @@ console.log('\n22. 各模型族的档位');
   familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
   await tick(10);
   assert(
-    levelsOf().length === 0,
-    'MiMo 在 Tavo 原生参数表里没有对应参数 id，只能手填',
+    JSON.stringify(levelsOf()) === JSON.stringify(['off', 'on']),
+    'MiMo 提供开关两档（官方只有 thinking 开关）',
     JSON.stringify(levelsOf())
   );
 
@@ -705,8 +706,8 @@ console.log('\n22. 各模型族的档位');
   familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
   await tick(10);
   assert(
-    levelsOf().length === 0,
-    'Kimi 同样没有 Tavo 参数 id，只能手填',
+    JSON.stringify(levelsOf()) === JSON.stringify(['off', 'low', 'high', 'max']),
+    'Kimi 提供关闭与三档强度',
     JSON.stringify(levelsOf())
   );
 
@@ -747,6 +748,97 @@ console.log('\n22. 各模型族的档位');
     'DeepSeek 发出 deepseek.reasoning_effort 参数 id',
     JSON.stringify(options)
   );
+}
+
+/* 23. 面板的模型族要跟随插件设置里的默认值 */
+console.log('\n23. 面板跟随设置默认值');
+{
+  const familySelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(1)');
+  const original = CONFIG.thinkingFamily;
+
+  CONFIG.thinkingFamily = 'mimo';
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  assert(
+    familySelect().value === 'mimo',
+    '面板的模型族跟随插件设置里的默认值',
+    familySelect().value
+  );
+
+  CONFIG.thinkingFamily = 'openrouter';
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  assert(
+    familySelect().value === 'openrouter',
+    '设置成 openrouter 也能正确显示',
+    familySelect().value
+  );
+
+  CONFIG.thinkingFamily = original;
+}
+
+/* 24. 参数写法切换：Tavo 参数 id / 平台原生字段 */
+console.log('\n24. 参数写法切换');
+{
+  const familySelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(1)');
+  const levelSelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(2)');
+
+  /* 平台写法：直接发平台字段 */
+  CONFIG.thinkingParamStyle = 'platform';
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  familySelect().value = 'openai';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  levelSelect().value = 'low';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  let options = store.generated[store.generated.length - 1].options;
+  assert(
+    options.settings && options.settings.reasoning_effort === 'low',
+    '平台写法：直接发 reasoning_effort',
+    JSON.stringify(options)
+  );
+
+  /* Tavo 写法：发参数 id */
+  CONFIG.thinkingParamStyle = 'tavo';
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  familySelect().value = 'openai';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  levelSelect().value = 'low';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  options = store.generated[store.generated.length - 1].options;
+  assert(
+    options.settings && options.settings['openai.reasoning_effort'] === 'low',
+    'Tavo 写法：发 openai.reasoning_effort 参数 id',
+    JSON.stringify(options)
+  );
+
+  /* MiMo 只有平台写法可用：Tavo 写法没有对应 id，应回退到平台字段 */
+  CONFIG.thinkingParamStyle = 'tavo';
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  familySelect().value = 'mimo';
+  familySelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  levelSelect().value = 'on';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  options = store.generated[store.generated.length - 1].options;
+  assert(
+    options.settings && options.settings.thinking &&
+      options.settings.thinking.type === 'enabled',
+    'MiMo 在 Tavo 写法下无对应 id，自动回退到平台字段',
+    JSON.stringify(options)
+  );
+
+  CONFIG.thinkingParamStyle = 'tavo';
 }
 
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));

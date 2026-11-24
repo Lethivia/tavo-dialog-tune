@@ -538,9 +538,25 @@ html[data-theme="dark"] .dt-sheet-root {
   opacity: 0.85;
 }
 
-/* 思考模式行：模型族 + 档位 */
+/* 思考模式行：模型族 + 档位（窄屏不再超出） */
 .dt-row--thinking {
   flex-wrap: wrap;
+}
+
+.dt-row--thinking .dt-row__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dt-row--thinking .dt-select {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+  text-overflow: ellipsis;
 }
 
 .dt-row__controls {
