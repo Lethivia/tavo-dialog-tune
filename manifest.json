@@ -4,14 +4,14 @@
   "name": {
     "$t": "plugin.name"
   },
-  "version": "1.1.4",
+  "version": "1.1.5",
   "entry": "entry.js",
   "author": "Lethivia",
   "description": {
     "$t": "plugin.description"
   },
   "releaseNotes": {
-    "$t": "releaseNotes.1_1_4"
+    "$t": "releaseNotes.1_1_5"
   },
   "localization": {
     "defaultLocale": "en",
@@ -307,6 +307,17 @@
           ],
           "description": {
             "$t": "settings.thinkingParamStyle.desc"
+          }
+        },
+        {
+          "key": "debugMode",
+          "type": "switch",
+          "label": {
+            "$t": "settings.debugMode"
+          },
+          "default": true,
+          "description": {
+            "$t": "settings.debugMode.desc"
           }
         }
       ]

@@ -118,5 +118,14 @@
   "settings.thinkingParamStyle.desc": "平台原生字段已在真机验证可用（默认）；Tavo 参数 id 是另一种写法，若平台字段不生效可切换试试。",
   "runtime.thinking.unconfirmed": "（未验证）",
   "runtime.thinking.family.openrouter": "OpenRouter",
-  "releaseNotes.1_1_4": "## 1.1.4 更新\n\n- 移除对话页面右上角菜单里的「对话微调」入口：气泡上的入口已经够用，菜单里不再重复出现"
+  "releaseNotes.1_1_5": "## 1.1.5 更新（调试版）\n\n- 微调面板新增「调试信息」折叠区：显示实际发出的请求参数、最终提示词、模型返回原文与耗时\n- 生成之前就能预览将要发出的参数，方便先核对再运行\n- 调试开关默认开启，正式发布前会关闭",
+  "settings.debugMode": "调试信息（临时）",
+  "settings.debugMode.desc": "显示实际发出的请求参数、提示词与模型返回。用于排查思考参数是否生效，正式发布前会关闭。",
+  "runtime.debug.title": "调试信息（临时）",
+  "runtime.debug.params": "实际发出的请求参数",
+  "runtime.debug.prompt": "最终提示词",
+  "runtime.debug.result": "模型返回原文",
+  "runtime.debug.idle": "尚未发起请求。上面是本次将要发送的参数。",
+  "runtime.debug.meta": "耗时 {elapsed} ms · 返回 {length} 字",
+  "runtime.debug.failed": "请求失败：{detail}"
 }

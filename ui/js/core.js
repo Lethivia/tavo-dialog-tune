@@ -163,6 +163,8 @@
       thinkingFamily: String(cfg('thinkingFamily', 'openai')),
       thinkingCustomBody: String(cfg('thinkingCustomBody', '')),
       thinkingParamStyle: String(cfg('thinkingParamStyle', 'platform')),
+      /* 临时调试开关：本轮排查用，正式发布前会关掉 */
+      debugMode: cfg('debugMode', true) !== false,
       guidePrompt: String(cfg('guidePrompt', ''))
     };
   }
@@ -1053,6 +1055,25 @@
     customField.appendChild(customArea);
     customField.hidden = true;
 
+    /* 调试面板：把实际发出的参数与模型返回摊开 */
+    var debugBox = el('details', 'dt-debug');
+    var debugSummary = el('summary', 'dt-debug__summary', t('runtime.debug.title'));
+    var debugBody = el('div', 'dt-debug__body');
+    var debugParams = el('pre', 'dt-debug__code');
+    var debugPrompt = el('pre', 'dt-debug__code');
+    var debugResult = el('pre', 'dt-debug__code');
+    var debugMeta = el('div', 'dt-debug__meta');
+    debugBody.appendChild(debugMeta);
+    debugBody.appendChild(el('div', 'dt-debug__label', t('runtime.debug.params')));
+    debugBody.appendChild(debugParams);
+    debugBody.appendChild(el('div', 'dt-debug__label', t('runtime.debug.prompt')));
+    debugBody.appendChild(debugPrompt);
+    debugBody.appendChild(el('div', 'dt-debug__label', t('runtime.debug.result')));
+    debugBody.appendChild(debugResult);
+    debugBox.appendChild(debugSummary);
+    debugBox.appendChild(debugBody);
+    debugBox.hidden = true;
+
     var privacy = el('p', 'dt-note', t('runtime.privacy'));
     privacy.setAttribute('data-dt-t', 'runtime.privacy');
 
@@ -1062,6 +1083,7 @@
     switches.appendChild(thinkingRow);
     switches.appendChild(customField);
     switches.appendChild(privacy);
+    switches.appendChild(debugBox);
 
     controls.appendChild(field);
 
@@ -1136,6 +1158,11 @@
       levelSelect: levelSelect,
       customArea: customArea,
       customField: customField,
+      debugBox: debugBox,
+      debugParams: debugParams,
+      debugPrompt: debugPrompt,
+      debugResult: debugResult,
+      debugMeta: debugMeta,
       recentHint: recentHint,
       number: number,
       minus: minus,
@@ -1369,6 +1396,7 @@
     dom.memorySwitch.setAttribute('aria-checked', model.useMemory ? 'true' : 'false');
     dom.memorySwitch.classList.toggle('is-on', model.useMemory);
     dom.recentHint.textContent = t('runtime.switch.recentHint');
+    renderDebug();
     dom.familySelect.value = model.thinkingFamily || 'openai';
     /* 档位可能因模型族不同而变化（各家枚举不同），确保下拉与模型一致 */
     var level = fillThinkingLevels(model.thinkingFamily || 'openai', model.thinkingLevel);
@@ -1707,9 +1735,12 @@
     render();
     startStatusTimer();
 
+    var debug = { startedAt: Date.now(), prompt: '', options: null, result: '', error: '' };
+
     buildPrompt(model)
       .then(function (prompt) {
         /* 不设超时：等不及的玩家会自己取消，由玩家决定节奏 */
+        debug.prompt = prompt;
         var options = { context: false };
         var extra = resolveThinkingBody(
           model.thinkingLevel,
@@ -1721,6 +1752,7 @@
              只覆盖这一次请求，不动用户自己的 API 设置。 */
           options.settings = extra;
         }
+        debug.options = options;
         return tavo.generate(prompt, options);
       })
       .then(function (text) {
@@ -1729,6 +1761,7 @@
           throw Object.assign(new Error(t('error.targetChanged')), { silent: true });
         }
         var result = text === null || text === undefined ? '' : String(text);
+        debug.result = result;
         if (!result.trim()) throw new Error(t('error.emptyResult'));
         model.candidates.push(result);
         model.activeIndex = model.candidates.length - 1;
@@ -1741,6 +1774,7 @@
       })
       .catch(function (error) {
         /* 失败时保持当前阶段，原文不会被改动 */
+        debug.error = (error && error.message) ? String(error.message) : '';
         if (error && error.silent) {
           tavo.utils.toast(t('error.targetChanged'));
           return;
@@ -1756,6 +1790,9 @@
       .then(function () {
         model.busy = false;
         stopStatusTimer();
+        debug.elapsedMs = Date.now() - debug.startedAt;
+        state.debug = debug;
+        renderDebug();
         render();
       });
   }
@@ -1778,6 +1815,44 @@
       if (text.indexOf(hints[i]) >= 0) return true;
     }
     return false;
+  }
+
+  /** 调试信息：实际发出的参数 / 提示词 / 模型返回 */
+  function renderDebug() {
+    var dom = state.dom;
+    if (!dom) return;
+    var on = settings().debugMode;
+    dom.debugBox.hidden = !on;
+    if (!on) return;
+    var debug = state.debug;
+    if (!debug) {
+      /* 还没发起过请求：先把「将要发出的参数」摆出来，方便先核对再跑 */
+      var model = state.model;
+      var preview = { context: false };
+      var extra = model
+        ? resolveThinkingBody(model.thinkingLevel, model.thinkingFamily, model.thinkingCustom)
+        : {};
+      if (extra && Object.keys(extra).length) preview.settings = extra;
+      dom.debugMeta.textContent = t('runtime.debug.idle');
+      dom.debugParams.textContent = JSON.stringify(preview, null, 2);
+      dom.debugPrompt.textContent = '';
+      dom.debugResult.textContent = '';
+      return;
+    }
+    dom.debugMeta.textContent = t('runtime.debug.meta', {
+      elapsed: debug.elapsedMs === undefined ? '-' : debug.elapsedMs,
+      length: debug.result ? debug.result.length : 0
+    });
+    dom.debugParams.textContent = JSON.stringify(debug.options || {}, null, 2);
+    dom.debugPrompt.textContent = debug.prompt || '';
+    dom.debugResult.textContent = debug.error
+      ? t('runtime.debug.failed', { detail: debug.error })
+      : debug.result || '';
+    try {
+      console.log('[dialog-tune] request', debug.options, 'prompt', debug.prompt, 'result', debug.result);
+    } catch (e) {
+      /* 忽略 */
+    }
   }
 
   function currentText() {

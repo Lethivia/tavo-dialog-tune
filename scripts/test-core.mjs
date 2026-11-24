@@ -876,5 +876,48 @@ console.log('\n25. 手动 body 持久化');
   );
 }
 
+/* 26. 调试面板：把实际请求与返回摊开 */
+console.log('\n26. 调试信息');
+{
+  const debugBox = () => window.document.querySelector('.dt-debug');
+  const debugParams = () => window.document.querySelector('.dt-debug__code');
+
+  CONFIG.debugMode = true;
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(20);
+  assert(!!debugBox() && !debugBox().hidden, '调试区默认可见（排查用）');
+  const codes = window.document.querySelectorAll('.dt-debug__code');
+  assert(codes.length === 3, '调试区分三段：请求参数 / 提示词 / 模型返回', String(codes.length));
+  assert(
+    /reasoning_effort|thinking/.test(codes[0].textContent),
+    '生成前就能看到将要发出的参数',
+    codes[0].textContent
+  );
+
+  window.document.querySelector('.dt-textarea').value = '改一改';
+  byText(window.document, '.dt-primary-btn', '生成微调').click();
+  await tick(30);
+  const codes2 = window.document.querySelectorAll('.dt-debug__code');
+  assert(
+    codes2[1].textContent.includes('改一改'),
+    '调试区显示最终提示词',
+    codes2[1].textContent.slice(0, 80)
+  );
+  assert(
+    codes2[2].textContent.length > 0,
+    '调试区显示模型返回原文',
+    codes2[2].textContent.slice(0, 80)
+  );
+  assert(
+    /耗时|took/.test(window.document.querySelector('.dt-debug__meta').textContent),
+    '调试区显示耗时'
+  );
+
+  CONFIG.debugMode = false;
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(20);
+  assert(debugBox().hidden === true, '关掉调试开关后调试区隐藏');
+}
+
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));
 process.exit(failures === 0 ? 0 : 1);

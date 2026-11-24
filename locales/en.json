@@ -118,5 +118,14 @@
   "settings.thinkingParamStyle.desc": "Raw platform fields are verified working on device (default); Tavo parameter ids are an alternative if they do not work.",
   "runtime.thinking.unconfirmed": " (unverified)",
   "runtime.thinking.family.openrouter": "OpenRouter",
-  "releaseNotes.1_1_4": "## 1.1.4\n\n- Removed the Dialog Tune entry from the chat page's top-right menu — the button on each bubble is enough"
+  "releaseNotes.1_1_5": "## 1.1.5 (debug build)\n\n- New collapsible debug section in the tuning panel: the exact request parameters, the final prompt, the model's raw reply and the elapsed time\n- The parameters that will be sent are previewed before you run anything\n- The debug switch is on by default and will be turned off before the official release",
+  "settings.debugMode": "Debug info (temporary)",
+  "settings.debugMode.desc": "Shows the exact request parameters, prompt and model reply. Used to check whether thinking parameters take effect; will be turned off before the official release.",
+  "runtime.debug.title": "Debug info (temporary)",
+  "runtime.debug.params": "Request parameters actually sent",
+  "runtime.debug.prompt": "Final prompt",
+  "runtime.debug.result": "Raw model reply",
+  "runtime.debug.idle": "No request yet. The parameters above are what will be sent.",
+  "runtime.debug.meta": "took {elapsed} ms · {length} chars back",
+  "runtime.debug.failed": "Request failed: {detail}"
 }

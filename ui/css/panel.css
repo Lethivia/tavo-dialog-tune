@@ -594,6 +594,63 @@ html[data-theme="dark"] .dt-sheet-root {
   min-height: 64px;
 }
 
+/* 调试面板（临时）：把实际请求与返回摊开 */
+.dt-debug {
+  border: 1px dashed var(--dt-border-strong);
+  border-radius: var(--dt-radius-sm);
+  background: var(--dt-surface-2);
+  padding: 8px 10px;
+  font-size: 12.5px;
+}
+
+.dt-debug[hidden] {
+  display: none;
+}
+
+.dt-debug__summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--dt-text-soft);
+  list-style: none;
+}
+
+.dt-debug__summary::-webkit-details-marker {
+  display: none;
+}
+
+.dt-debug__body {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dt-debug__meta {
+  color: var(--dt-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.dt-debug__label {
+  color: var(--dt-text-faint);
+  font-size: 11.5px;
+  margin-top: 4px;
+}
+
+.dt-debug__code {
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--dt-surface);
+  border: 1px solid var(--dt-border);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  max-height: 30vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* 生成中的状态行：实时计时，缓解「是不是卡死了」 */
 .dt-status {
   display: flex;
