@@ -216,8 +216,8 @@ console.log('\nD. 宿主缺席：明确提示而不是无声无息');
   );
 }
 
-/* ================= E. entry.js 的两个原生入口 ================= */
-console.log('\nE. entry.js：输入框 + 菜单与最后一条消息 action bar');
+/* ================= E. entry.js 的原生入口 ================= */
+console.log('\nE. entry.js：输入框 + 菜单入口（右上角菜单不再有入口）');
 {
   const fake = createFakeTavo(catalog);
   const page = makePage();
@@ -228,7 +228,10 @@ console.log('\nE. entry.js：输入框 + 菜单与最后一条消息 action bar'
   await tick(20);
 
   assert(fake.registered().includes('inputActions:dialog-tune'), 'entry 注册了输入框动作');
-  assert(fake.registered().includes('sidebar:dialog-tune'), 'entry 注册了侧边栏动作');
+  assert(
+    !fake.registered().includes('sidebar:dialog-tune'),
+    '不再注册侧边栏动作（右上角菜单里不显示入口）'
+  );
 
   fake.store.draft = '我今天有点累';
   fake.fire('inputActions:dialog-tune');
@@ -239,19 +242,6 @@ console.log('\nE. entry.js：输入框 + 菜单与最后一条消息 action bar'
   const api = window.__dialogTune__;
   api.close();
   await tick(20);
-  fake.fire('sidebar:dialog-tune');
-  await tick(60);
-  assert(
-    !page.window.document.querySelector('.dt-sheet-root').hidden,
-    '侧边栏动作能打开面板'
-  );
-  const lastMessage = fake.store.messages[fake.store.messages.length - 1];
-  assert(
-    page.window.document.querySelector('.dt-sheet__subtitle').textContent.includes(
-      lastMessage.role === 'user' ? '我的' : '角色'
-    ),
-    '侧边栏入口默认作用于最后一条消息'
-  );
 }
 
 /* ================= F. 插件被关闭时要有明确反馈 ================= */

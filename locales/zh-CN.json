@@ -118,5 +118,5 @@
   "settings.thinkingParamStyle.desc": "平台原生字段已在真机验证可用（默认）；Tavo 参数 id 是另一种写法，若平台字段不生效可切换试试。",
   "runtime.thinking.unconfirmed": "（未验证）",
   "runtime.thinking.family.openrouter": "OpenRouter",
-  "releaseNotes.1_1_3": "## 1.1.3 更新\n\n- 经真机实测，平台原生字段在微调请求里确实会透传（MiMo 验证通过），因此改为默认写法\n- 每个模型族都配齐了官方文档里的开关与强度档位，MiMo 不再需要手填\n- 手动填写的 HTTP body 会记住，下次打开面板直接沿用\n- 模型族与档位选择在会话间保留；设置页的默认值改动时以设置为准"
+  "releaseNotes.1_1_4": "## 1.1.4 更新\n\n- 移除对话页面右上角菜单里的「对话微调」入口：气泡上的入口已经够用，菜单里不再重复出现"
 }
