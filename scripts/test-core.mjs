@@ -623,8 +623,8 @@ console.log('\n21. 思考模式');
   await tick(30);
   options = store.generated[store.generated.length - 1].options;
   assert(
-    options.settings && options.settings['openai.reasoning_effort'] === 'low',
-    '已知模型族按档位生成 Tavo 参数 id（OpenAI 兼容 → openai.reasoning_effort）',
+    options.settings && options.settings.reasoning_effort === 'low',
+    '已知模型族按档位生成平台字段（OpenAI 兼容 → reasoning_effort）',
     JSON.stringify(options)
   );
 
@@ -744,8 +744,11 @@ console.log('\n22. 各模型族的档位');
   await tick(30);
   const options = store.generated[store.generated.length - 1].options;
   assert(
-    options.settings && options.settings['deepseek.reasoning_effort'] === 'low',
-    'DeepSeek 发出 deepseek.reasoning_effort 参数 id',
+    options.settings &&
+      options.settings.thinking &&
+      options.settings.thinking.type === 'enabled' &&
+      options.settings.reasoning_effort === 'low',
+    'DeepSeek 同时发出 thinking 与 reasoning_effort',
     JSON.stringify(options)
   );
 }
@@ -839,6 +842,38 @@ console.log('\n24. 参数写法切换');
   );
 
   CONFIG.thinkingParamStyle = 'tavo';
+}
+
+/* 25. 手动填的 body 要跨会话保留 */
+console.log('\n25. 手动 body 持久化');
+{
+  const levelSelect = () => window.document.querySelector('.dt-row--thinking select:nth-of-type(2)');
+
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(10);
+  levelSelect().value = 'custom';
+  levelSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(10);
+  const area = window.document.querySelector('.dt-textarea--mono');
+  area.value = '{"thinking": {"type": "disabled"}}';
+  area.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(30);
+
+  /* 重新打开面板 */
+  await api.open({ kind: 'message', messageId: 2, role: 'assistant' });
+  await tick(20);
+  const area2 = window.document.querySelector('.dt-textarea--mono');
+  assert(
+    area2.value === '{"thinking": {"type": "disabled"}}',
+    '下次打开面板时手动填的 body 还在（不用每次重填）',
+    area2.value
+  );
+  assert(
+    store.variables['global:dialog_tune_thinking'] &&
+      store.variables['global:dialog_tune_thinking'].custom ===
+        '{"thinking": {"type": "disabled"}}',
+    '手动 body 已存进全局变量'
+  );
 }
 
 console.log('\n' + (failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`));

@@ -115,8 +115,8 @@
   "settings.thinkingParamStyle": "Tavo 参数 id（推荐）",
   "settings.thinkingParamStyle.tavo": "Tavo 参数 id（推荐）",
   "settings.thinkingParamStyle.platform": "平台原生字段",
-  "settings.thinkingParamStyle.desc": "Tavo 参数 id 由原生层翻译成平台字段，成功率最高；平台字段在文本生成路径上能否透传未经验证，可两种都试。",
+  "settings.thinkingParamStyle.desc": "平台原生字段已在真机验证可用（默认）；Tavo 参数 id 是另一种写法，若平台字段不生效可切换试试。",
   "runtime.thinking.unconfirmed": "（未验证）",
   "runtime.thinking.family.openrouter": "OpenRouter",
-  "releaseNotes.1_1_2": "## 1.1.2 更新\n\n- 模型族补上 OpenRouter 与 xAI Grok，设置页与面板下拉保持一致\n- 每个模型族都提供「关闭/开启」档位，不再只剩自定义 JSON\n- 新增「参数写法」设置：Tavo 参数 id（推荐）或平台原生字段，两种都试得出来\n- 面板里的模型族与思考档位改为自适应宽度，不再超出屏幕"
+  "releaseNotes.1_1_3": "## 1.1.3 更新\n\n- 经真机实测，平台原生字段在微调请求里确实会透传（MiMo 验证通过），因此改为默认写法\n- 每个模型族都配齐了官方文档里的开关与强度档位，MiMo 不再需要手填\n- 手动填写的 HTTP body 会记住，下次打开面板直接沿用\n- 模型族与档位选择在会话间保留；设置页的默认值改动时以设置为准"
 }

@@ -162,7 +162,7 @@
       contentLanguage: String(cfg('contentLanguage', 'source')),
       thinkingFamily: String(cfg('thinkingFamily', 'openai')),
       thinkingCustomBody: String(cfg('thinkingCustomBody', '')),
-      thinkingParamStyle: String(cfg('thinkingParamStyle', 'tavo')),
+      thinkingParamStyle: String(cfg('thinkingParamStyle', 'platform')),
       guidePrompt: String(cfg('guidePrompt', ''))
     };
   }
@@ -188,6 +188,38 @@
       .catch(function () {
         return state.prefs;
       });
+  }
+
+  /* 思考偏好：记在全局变量里，跨会话保留（设置页的默认值改动时会重置） */
+  var THINKING_PREFS_KEY = 'dialog_tune_thinking';
+
+  function loadThinkingPrefs() {
+    return tavo.variable
+      .get(THINKING_PREFS_KEY, 'global')
+      .then(function (value) {
+        return value && typeof value === 'object' ? value : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function saveThinkingPrefs() {
+    var model = state.model;
+    if (!model) return Promise.resolve();
+    return tavo.variable
+      .set(
+        THINKING_PREFS_KEY,
+        {
+          family: model.thinkingFamily,
+          level: model.thinkingLevel,
+          custom: model.thinkingCustom,
+          paramStyle: settings().thinkingParamStyle,
+          sourceDefault: settings().thinkingFamily
+        },
+        'global'
+      )
+      .catch(function () {});
   }
 
   function savePrefs() {
@@ -269,115 +301,111 @@
   /**
    * 每个模型族的思考参数。
    *
-   * ⚠️ 关键：settings 的键有两种可能写法，插件都支持（设置页可切换）：
-   *   · tavo    —— Tavo 内部的模型参数 id（openai.reasoning_effort、
-   *               claude_thinking.budget_tokens、gemini_thinking_level…），
-   *               原生层会查表翻译成平台字段。**这类是 Tavo 自己认的参数，
-   *               成功率最高。**
-   *   · platform—— 平台原生字段（reasoning_effort、thinking:{type:enabled}…）。
-   *               文本生成路径没有 extraBody，这类字段能否被透传**未经验证**；
-   *               若不生效，请在 Tavo 的「API 连接 → 参数设置 → Body」里配置
-   *               （那是官方支持的额外参数入口，但对整个连接生效）。
+   * ✅ 已实测：手动填的**平台原生字段**（如 {"thinking":{"type":"disabled"}}）在
+   * 文本生成路径上确实会透传到模型（MiMo 实测有效），因此「平台字段」是默认写法。
+   *
+   * 「Tavo 参数 id」是另一种写法（openai.reasoning_effort 等），原生层会查表翻译，
+   * 但没有真机验证过，保留为备选。
    *
    * 各家「关闭思考」的语义不统一（none / disabled / minimal / 省略参数），
-   * 强制思考的型号官方明确说传 disabled 会 400，这类档位标为未确认。
+   * 强制思考的型号官方明确说传 disabled 会 400，这类档位标注「未验证」。
    */
   var THINKING_PROFILES = {
     openai: {
       doc: 'https://platform.openai.com/docs/guides/reasoning',
       levels: [
-        { key: 'off', tavo: { 'openai.reasoning_effort': 'none' }, platform: { reasoning_effort: 'none' } },
-        { key: 'minimal', tavo: { 'openai.reasoning_effort': 'minimal' }, platform: { reasoning_effort: 'minimal' } },
-        { key: 'low', tavo: { 'openai.reasoning_effort': 'low' }, platform: { reasoning_effort: 'low' } },
-        { key: 'medium', tavo: { 'openai.reasoning_effort': 'medium' }, platform: { reasoning_effort: 'medium' } },
-        { key: 'high', tavo: { 'openai.reasoning_effort': 'high' }, platform: { reasoning_effort: 'high' } },
-        { key: 'xhigh', tavo: { 'openai.reasoning_effort': 'xhigh' }, platform: { reasoning_effort: 'xhigh' } }
+        { key: 'off', platform: { reasoning_effort: 'none' }, tavo: { 'openai.reasoning_effort': 'none' } },
+        { key: 'minimal', platform: { reasoning_effort: 'minimal' }, tavo: { 'openai.reasoning_effort': 'minimal' } },
+        { key: 'low', platform: { reasoning_effort: 'low' }, tavo: { 'openai.reasoning_effort': 'low' } },
+        { key: 'medium', platform: { reasoning_effort: 'medium' }, tavo: { 'openai.reasoning_effort': 'medium' } },
+        { key: 'high', platform: { reasoning_effort: 'high' }, tavo: { 'openai.reasoning_effort': 'high' } },
+        { key: 'xhigh', platform: { reasoning_effort: 'xhigh' }, tavo: { 'openai.reasoning_effort': 'xhigh' } }
       ]
     },
     openrouter: {
       doc: 'https://openrouter.ai/docs/use-cases/reasoning-tokens',
       levels: [
-        { key: 'off', tavo: { 'openrouter.reasoning_effort': 'none' }, platform: { reasoning_effort: 'none' } },
-        { key: 'low', tavo: { 'openrouter.reasoning_effort': 'low' }, platform: { reasoning_effort: 'low' } },
-        { key: 'medium', tavo: { 'openrouter.reasoning_effort': 'medium' }, platform: { reasoning_effort: 'medium' } },
-        { key: 'high', tavo: { 'openrouter.reasoning_effort': 'high' }, platform: { reasoning_effort: 'high' } },
-        { key: 'xhigh', tavo: { 'openrouter.reasoning_effort': 'xhigh' }, platform: { reasoning_effort: 'xhigh' } }
+        { key: 'off', platform: { reasoning_effort: 'none' }, tavo: { 'openrouter.reasoning_effort': 'none' }, unconfirmed: true },
+        { key: 'low', platform: { reasoning_effort: 'low' }, tavo: { 'openrouter.reasoning_effort': 'low' } },
+        { key: 'medium', platform: { reasoning_effort: 'medium' }, tavo: { 'openrouter.reasoning_effort': 'medium' } },
+        { key: 'high', platform: { reasoning_effort: 'high' }, tavo: { 'openrouter.reasoning_effort': 'high' } },
+        { key: 'xhigh', platform: { reasoning_effort: 'xhigh' }, tavo: { 'openrouter.reasoning_effort': 'xhigh' } }
       ]
     },
     deepseek: {
       doc: 'https://api-docs.deepseek.com/guides/thinking_mode/',
       levels: [
-        { key: 'off', tavo: {}, platform: { thinking: { type: 'disabled' } }, unconfirmed: true },
-        { key: 'low', tavo: { 'deepseek.reasoning_effort': 'low' }, platform: { reasoning_effort: 'low' } },
-        { key: 'high', tavo: { 'deepseek.reasoning_effort': 'high' }, platform: { reasoning_effort: 'high' } },
-        { key: 'max', tavo: { 'deepseek.reasoning_effort': 'max' }, platform: { reasoning_effort: 'max' } }
+        { key: 'off', platform: { thinking: { type: 'disabled' } }, tavo: {} },
+        { key: 'low', platform: { thinking: { type: 'enabled' }, reasoning_effort: 'low' }, tavo: { 'deepseek.reasoning_effort': 'low' } },
+        { key: 'high', platform: { thinking: { type: 'enabled' }, reasoning_effort: 'high' }, tavo: { 'deepseek.reasoning_effort': 'high' } },
+        { key: 'max', platform: { thinking: { type: 'enabled' }, reasoning_effort: 'max' }, tavo: { 'deepseek.reasoning_effort': 'max' } }
       ]
     },
     glm: {
       doc: 'https://docs.bigmodel.cn/cn/guide/capabilities/thinking',
-      /* GLM-5.3 强制思考：官方明确 disabled 会 400 */
       levels: [
-        { key: 'off', tavo: {}, platform: { thinking: { type: 'disabled' } }, unconfirmed: true },
-        { key: 'low', tavo: { 'zhipu.reasoning_effort': 'low' }, platform: { reasoning_effort: 'low' } },
-        { key: 'high', tavo: { 'zhipu.reasoning_effort': 'high' }, platform: { reasoning_effort: 'high' } },
-        { key: 'max', tavo: { 'zhipu.reasoning_effort': 'max' }, platform: { reasoning_effort: 'max' } }
+        /* GLM-5.3 官方说明 disabled 会 400 */
+        { key: 'off', platform: { thinking: { type: 'disabled' } }, tavo: {}, unconfirmed: true },
+        { key: 'low', platform: { thinking: { type: 'enabled' }, reasoning_effort: 'low' }, tavo: { 'zhipu.reasoning_effort': 'low' } },
+        { key: 'high', platform: { thinking: { type: 'enabled' }, reasoning_effort: 'high' }, tavo: { 'zhipu.reasoning_effort': 'high' } },
+        { key: 'max', platform: { thinking: { type: 'enabled' }, reasoning_effort: 'max' }, tavo: { 'zhipu.reasoning_effort': 'max' } }
       ]
     },
     mimo: {
       doc: 'https://mimo.mi.com/static/docs/quick-start/usage-guide/text-generation/deep-thinking.md',
-      /* MiMo 官方只有 thinking 开关，没有 reasoning_effort */
+      /* MiMo 官方只有 thinking 开关；实测该字段在微调请求里生效 */
       levels: [
-        { key: 'off', tavo: {}, platform: { thinking: { type: 'disabled' } }, unconfirmed: true },
-        { key: 'on', tavo: {}, platform: { thinking: { type: 'enabled' } }, unconfirmed: true }
+        { key: 'off', platform: { thinking: { type: 'disabled' } }, tavo: {} },
+        { key: 'on', platform: { thinking: { type: 'enabled' } }, tavo: {} }
       ]
     },
     anthropic: {
       doc: 'https://platform.claude.com/docs/en/build-with-claude/thinking',
       levels: [
-        { key: 'off', tavo: {}, platform: {}, unconfirmed: true },
-        { key: 'low', tavo: { 'claude_thinking.budget_tokens': 2048 }, platform: { thinking: { type: 'enabled', budget_tokens: 2048 } } },
-        { key: 'medium', tavo: { 'claude_thinking.budget_tokens': 8192 }, platform: { thinking: { type: 'enabled', budget_tokens: 8192 } } },
-        { key: 'high', tavo: { 'claude_thinking.budget_tokens': 16384 }, platform: { thinking: { type: 'enabled', budget_tokens: 16384 } } }
+        { key: 'off', platform: { thinking: { type: 'disabled' } }, tavo: {}, unconfirmed: true },
+        { key: 'low', platform: { thinking: { type: 'adaptive' }, output_config: { effort: 'low' } }, tavo: { 'claude_thinking.budget_tokens': 2048 } },
+        { key: 'medium', platform: { thinking: { type: 'adaptive' }, output_config: { effort: 'medium' } }, tavo: { 'claude_thinking.budget_tokens': 8192 } },
+        { key: 'high', platform: { thinking: { type: 'adaptive' }, output_config: { effort: 'high' } }, tavo: { 'claude_thinking.budget_tokens': 16384 } }
       ]
     },
     gemini: {
       doc: 'https://ai.google.dev/gemini-api/docs/thinking',
       levels: [
-        { key: 'off', tavo: {}, platform: { generationConfig: { thinkingConfig: { thinkingBudget: 0 } } }, unconfirmed: true },
-        { key: 'minimal', tavo: { 'gemini_thinking_level': 'MINIMAL' }, platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'MINIMAL' } } } },
-        { key: 'low', tavo: { 'gemini_thinking_level': 'LOW' }, platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } } },
-        { key: 'medium', tavo: { 'gemini_thinking_level': 'MEDIUM' }, platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'MEDIUM' } } } },
-        { key: 'high', tavo: { 'gemini_thinking_level': 'HIGH' }, platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } } },
-        { key: 'xhigh', tavo: { 'gemini_thinking_level': 'XHIGH' }, platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'XHIGH' } } } }
+        { key: 'off', platform: { generationConfig: { thinkingConfig: { thinkingBudget: 0 } } }, tavo: {}, unconfirmed: true },
+        { key: 'minimal', platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'MINIMAL' } } }, tavo: { 'gemini_thinking_level': 'MINIMAL' } },
+        { key: 'low', platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } } }, tavo: { 'gemini_thinking_level': 'LOW' } },
+        { key: 'medium', platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'MEDIUM' } } }, tavo: { 'gemini_thinking_level': 'MEDIUM' } },
+        { key: 'high', platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'HIGH' } } }, tavo: { 'gemini_thinking_level': 'HIGH' } },
+        { key: 'xhigh', platform: { generationConfig: { thinkingConfig: { thinkingLevel: 'XHIGH' } } }, tavo: { 'gemini_thinking_level': 'XHIGH' } }
       ]
     },
     grok: {
       doc: 'https://docs.x.ai/developers/model-capabilities/text/reasoning',
       levels: [
-        { key: 'off', tavo: {}, platform: { reasoning_effort: 'none' }, unconfirmed: true },
-        { key: 'low', tavo: {}, platform: { reasoning_effort: 'low' }, unconfirmed: true },
-        { key: 'medium', tavo: {}, platform: { reasoning_effort: 'medium' }, unconfirmed: true },
-        { key: 'high', tavo: {}, platform: { reasoning_effort: 'high' }, unconfirmed: true },
-        { key: 'xhigh', tavo: {}, platform: { reasoning_effort: 'xhigh' }, unconfirmed: true }
+        { key: 'off', platform: { reasoning_effort: 'none' }, tavo: {}, unconfirmed: true },
+        { key: 'low', platform: { reasoning_effort: 'low' }, tavo: {} },
+        { key: 'medium', platform: { reasoning_effort: 'medium' }, tavo: {} },
+        { key: 'high', platform: { reasoning_effort: 'high' }, tavo: {} },
+        { key: 'xhigh', platform: { reasoning_effort: 'xhigh' }, tavo: {} }
       ]
     },
     kimi: {
       doc: 'https://platform.kimi.ai/docs/guide/use-reasoning-effort',
       levels: [
-        { key: 'off', tavo: {}, platform: { reasoning_effort: 'none' }, unconfirmed: true },
-        { key: 'low', tavo: {}, platform: { reasoning_effort: 'low' }, unconfirmed: true },
-        { key: 'high', tavo: {}, platform: { reasoning_effort: 'high' }, unconfirmed: true },
-        { key: 'max', tavo: {}, platform: { reasoning_effort: 'max' }, unconfirmed: true }
+        { key: 'off', platform: { reasoning_effort: 'none' }, tavo: {}, unconfirmed: true },
+        { key: 'low', platform: { reasoning_effort: 'low' }, tavo: {} },
+        { key: 'high', platform: { reasoning_effort: 'high' }, tavo: {} },
+        { key: 'max', platform: { reasoning_effort: 'max' }, tavo: {} }
       ]
     },
     qwen: {
       doc: 'https://www.alibabacloud.com/help/en/model-studio/deep-thinking',
       levels: [
-        { key: 'off', tavo: {}, platform: { enable_thinking: false }, unconfirmed: true },
-        { key: 'low', tavo: {}, platform: { enable_thinking: true, reasoning_effort: 'low' }, unconfirmed: true },
-        { key: 'medium', tavo: {}, platform: { enable_thinking: true, reasoning_effort: 'medium' }, unconfirmed: true },
-        { key: 'high', tavo: {}, platform: { enable_thinking: true, reasoning_effort: 'high' }, unconfirmed: true },
-        { key: 'xhigh', tavo: {}, platform: { enable_thinking: true, reasoning_effort: 'xhigh' }, unconfirmed: true }
+        { key: 'off', platform: { enable_thinking: false }, tavo: {} },
+        { key: 'low', platform: { enable_thinking: true, reasoning_effort: 'low' }, tavo: {} },
+        { key: 'medium', platform: { enable_thinking: true, reasoning_effort: 'medium' }, tavo: {} },
+        { key: 'high', platform: { enable_thinking: true, reasoning_effort: 'high' }, tavo: {} },
+        { key: 'xhigh', platform: { enable_thinking: true, reasoning_effort: 'xhigh' }, tavo: {} }
       ]
     }
   };
@@ -1229,14 +1257,17 @@
       state.model.thinkingFamily = dom.familySelect.value;
       var level = fillThinkingLevels(state.model.thinkingFamily, state.model.thinkingLevel);
       state.model.thinkingLevel = level;
+      saveThinkingPrefs();
       render();
     });
     dom.levelSelect.addEventListener('change', function () {
       if (state.model) state.model.thinkingLevel = dom.levelSelect.value;
+      saveThinkingPrefs();
       render();
     });
     dom.customArea.addEventListener('input', function () {
       if (state.model) state.model.thinkingCustom = dom.customArea.value;
+      saveThinkingPrefs();
     });
 
     dom.number.addEventListener('change', commitRecent);
@@ -1527,8 +1558,10 @@
     if (!state.dom) buildSheet();
     state.lastFocused = document.activeElement;
 
-    return loadPrefs()
-      .then(function () {
+    var loadedPrefs = null;
+    return Promise.all([loadPrefs(), loadThinkingPrefs()])
+      .then(function (loaded) {
+        loadedPrefs = loaded;
         if (target.kind === 'message') {
           return tavo.message.get(target.messageId).then(function (message) {
             if (!message) throw new Error(t('error.messageMissing'));
@@ -1555,6 +1588,21 @@
           tavo.utils.toast(t('error.emptyTarget'));
           return false;
         }
+        /* 思考偏好：设置页的默认值改动时，以设置为准；否则沿用上次在面板里选的 */
+        var saved = loadedPrefs[1];
+        var sourceDefault = conf.thinkingFamily;
+        var thinking = {
+          family: sourceDefault,
+          level: 'off',
+          custom: conf.thinkingCustomBody || '',
+          paramStyle: conf.thinkingParamStyle
+        };
+        if (saved && saved.sourceDefault === sourceDefault) {
+          thinking.family = saved.family || sourceDefault;
+          thinking.level = saved.level || 'off';
+          thinking.custom = typeof saved.custom === 'string' ? saved.custom : thinking.custom;
+          thinking.paramStyle = saved.paramStyle || thinking.paramStyle;
+        }
         state.model = {
           target: {
             kind: target.kind,
@@ -1566,9 +1614,9 @@
           instruction: '',
           useMemory: state.prefs.useMemory,
           recentN: clamp(state.prefs.recentN, 0, conf.maxRecentN),
-          thinkingFamily: conf.thinkingFamily,
-          thinkingLevel: 'off',
-          thinkingCustom: conf.thinkingCustomBody || '',
+          thinkingFamily: thinking.family,
+          thinkingLevel: thinking.level,
+          thinkingCustom: thinking.custom,
           stage: 'compose',
           candidates: [],
           activeIndex: 0,
