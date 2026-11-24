@@ -1,6 +1,6 @@
 {
   "plugin.name": "Dialog Tune",
-  "plugin.description": "Dialog Tune applies a targeted edit to an AI reply or to your own draft. Tap the Tune button under a message, or use the input box '+' menu and the action bar of the last message: describe the edit, optionally attach long-term memory and the last few messages as background, and the model API bound to the current chat regenerates the whole passage. The result shows only the rewritten text with the differences highlighted inline; nothing is written back until you confirm, and the result is stored as one more version of that message, so you can switch back to the original with Tavo's native version switching. The plugin makes no judgement calls for you: how much to change, what to keep, and whether to replace or append are all yours.",
+  "plugin.description": "Dialog Tune applies a targeted edit to an AI reply or to your own draft. Tap the Tune button under a message: describe the edit, optionally attach long-term memory and the last few messages as background, and the model API bound to the current chat regenerates the whole passage. The result is aligned per paragraph with the changed parts highlighted inline and a count of added/removed characters; if it comes back identical to the original you are told so. Written back it becomes one more version of that message, so you can switch back to the original with Tavo's native version switching. The panel also offers a thinking mode: pick the switch and level for your model family, or type a raw HTTP body — the parameters travel with that one tuning request only, so your own API settings and normal chat are untouched. The plugin makes no judgement calls for you: how much to change, what to keep and whether to replace are all up to you.",
   "actions.dialogTune": "Dialog Tune",
   "settings.info": "Defaults for Dialog Tune. The guiding prompt tells the model how to carry out an edit — rewrite it to match your own writing habits.",
   "settings.enabled": "Enable plugin",
@@ -118,14 +118,14 @@
   "settings.thinkingParamStyle.desc": "Raw platform fields are verified working on device (default); Tavo parameter ids are an alternative if they do not work.",
   "runtime.thinking.unconfirmed": " (unverified)",
   "runtime.thinking.family.openrouter": "OpenRouter",
-  "releaseNotes.1_1_5": "## 1.1.5 (debug build)\n\n- New collapsible debug section in the tuning panel: the exact request parameters, the final prompt, the model's raw reply and the elapsed time\n- The parameters that will be sent are previewed before you run anything\n- The debug switch is on by default and will be turned off before the official release",
   "settings.debugMode": "Debug info (temporary)",
-  "settings.debugMode.desc": "Shows the exact request parameters, prompt and model reply. Used to check whether thinking parameters take effect; will be turned off before the official release.",
-  "runtime.debug.title": "Debug info (temporary)",
+  "settings.debugMode.desc": "Shows the exact request parameters, prompt and model reply. Off by default; turn it on temporarily when debugging.",
+  "runtime.debug.title": "Debug info (off by default)",
   "runtime.debug.params": "Request parameters actually sent",
   "runtime.debug.prompt": "Final prompt",
   "runtime.debug.result": "Raw model reply",
   "runtime.debug.idle": "No request yet. The parameters above are what will be sent.",
   "runtime.debug.meta": "took {elapsed} ms · {length} chars back",
-  "runtime.debug.failed": "Request failed: {detail}"
+  "runtime.debug.failed": "Request failed: {detail}",
+  "releaseNotes.1_2_0": "## 1.2.0\n\nUser-visible changes since 1.0.10:\n\n**Interface**\n- The tuning panel now really sits at the bottom of the chat page. It used to be constrained by the message bubble's container and squeezed under the bubble, almost unusable.\n- Removed the \"Dialog Tune\" entry from the chat page's top-right menu — the button on each bubble and the input box \"+\" menu remain.\n- The inline Tune button is darker and stays legible on both light and dark chat themes.\n\n**Difference highlighting**\n- Results are aligned per paragraph and the changed parts are highlighted inline; long messages no longer come back unmarked.\n- The result header shows \"added N chars / removed M chars\", and says so explicitly when the result is identical to the original.\n- Added and removed text are highlighted more clearly (bold plus underline).\n\n**Thinking mode (tuning only)**\n- Pick a model family and level in the tuning panel, or type a raw HTTP body (for example {\"thinking\":{\"type\":\"disabled\"}}).\n- The parameters only travel with that one tuning request — **your own API settings stay untouched** and normal chat is unaffected.\n- Manually typed bodies are remembered and reused next time.\n- A live elapsed-time indicator while generating.\n\n**Fixes**\n- The first tap on \"Generate\" did nothing after changing the recent-message count.\n- Results were lost when the target changed during generation.\n- Content was not written back when message variants were unavailable.\n- The host panel and the message fragment could not reach each other in some environments.\n"
 }

@@ -163,8 +163,8 @@
       thinkingFamily: String(cfg('thinkingFamily', 'openai')),
       thinkingCustomBody: String(cfg('thinkingCustomBody', '')),
       thinkingParamStyle: String(cfg('thinkingParamStyle', 'platform')),
-      /* 临时调试开关：本轮排查用，正式发布前会关掉 */
-      debugMode: cfg('debugMode', true) !== false,
+      /* 调试开关：默认关闭，需要排查时在设置里临时打开 */
+      debugMode: cfg('debugMode', false) !== false,
       guidePrompt: String(cfg('guidePrompt', ''))
     };
   }
@@ -1848,11 +1848,6 @@
     dom.debugResult.textContent = debug.error
       ? t('runtime.debug.failed', { detail: debug.error })
       : debug.result || '';
-    try {
-      console.log('[dialog-tune] request', debug.options, 'prompt', debug.prompt, 'result', debug.result);
-    } catch (e) {
-      /* 忽略 */
-    }
   }
 
   function currentText() {
