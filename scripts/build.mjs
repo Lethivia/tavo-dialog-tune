@@ -5,10 +5,10 @@
  * 用法：node scripts/build.mjs
  */
 import zlib from 'node:zlib';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync, utimesSync, existsSync } from 'node:fs';
 import { dirname, resolve, relative, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,6 +45,28 @@ function walk(dir, base = dir, out = []) {
   return out;
 }
 
+/**
+ * 打包时间戳：优先用 SOURCE_DATE_EPOCH，其次用最新一次提交的提交时间，
+ * 最后才用当前时间。这样同一份源码构建出来的包是逐字节可复现的。
+ */
+function buildTimestamp() {
+  if (process.env.SOURCE_DATE_EPOCH) {
+    return new Date(Number(process.env.SOURCE_DATE_EPOCH) * 1000);
+  }
+  try {
+    const out = execFileSync('git', ['log', '-1', '--format=%ct'], {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'ignore']
+    })
+      .toString()
+      .trim();
+    if (out) return new Date(Number(out) * 1000);
+  } catch (e) {
+    /* 没有 git 或不是仓库时退回当前时间 */
+  }
+  return new Date();
+}
+
 function dosDateTime(date) {
   const time = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | ((date.getSeconds() / 2) & 0x1f);
   const day = (((date.getFullYear() - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0x0f) << 5) | (date.getDate() & 0x1f);
@@ -55,7 +77,7 @@ function buildZip(files) {
   const locals = [];
   const central = [];
   let offset = 0;
-  const stamp = dosDateTime(new Date());
+  const stamp = dosDateTime(buildTimestamp());
 
   for (const file of files) {
     const name = relative(ROOT, file).split(sep).join('/');
@@ -145,7 +167,25 @@ const outputs = [resolve(DIST, `${baseName}.tpg`), resolve(DIST, `${baseName}.zi
  * 优先使用系统 zip（Info-ZIP，官方文档示例同款），产出兼容性最好的包；
  * 没有 zip 命令时退回内置的最小 ZIP 写入器。
  */
-function packageWithSystemZip(outFile) {
+function packageWithSystemZip(outFile, stamp) {
+  /* 系统 zip 会记录每个条目的 mtime；先统一成同一个时间戳，
+     否则同一份源码每次构建出来的包都不一致（无法校验发布物）。 */
+  try {
+    const when = stamp.getTime() / 1000;
+    const stampPath = (full) => {
+      try {
+        utimesSync(full, when, when);
+      } catch (e) {
+        /* 忽略 */
+      }
+      if (existsSync(full) && statSync(full).isDirectory()) {
+        for (const name of readdirSync(full)) stampPath(join(full, name));
+      }
+    };
+    for (const item of INCLUDE) stampPath(resolve(ROOT, item));
+  } catch (e) {
+    /* 忽略 */
+  }
   const result = spawnSync('zip', ['-r', '-q', outFile, ...INCLUDE], {
     cwd: ROOT,
     stdio: 'pipe'
@@ -161,7 +201,7 @@ function packageWithSystemZip(outFile) {
 let usedSystemZip = false;
 for (const outFile of outputs) {
   rmSync(outFile, { force: true });
-  if (packageWithSystemZip(outFile)) {
+  if (packageWithSystemZip(outFile, buildTimestamp())) {
     usedSystemZip = true;
   } else {
     writeFileSync(outFile, buildZip(files));
